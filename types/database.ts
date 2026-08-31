@@ -1,6 +1,12 @@
 // Hand-written mirror of sql/*.sql. If you regenerate this from a live
 // Supabase project (`supabase gen types typescript`), keep the shape
 // identical to what the app expects in lib/supabase/*.
+//
+// `Relationships: never[]` on every table (and the empty `Views`/`Functions`
+// at the schema level) aren't used anywhere in this app — they exist only
+// because @supabase/supabase-js's generics require the full GenericSchema
+// shape to infer row types at all. Omitting them silently collapses every
+// query result to `never`.
 
 export type ProfileRole = "owner" | "admin" | "viewer";
 
@@ -55,6 +61,7 @@ export interface Database {
           email: string;
         };
         Update: Partial<Database["public"]["Tables"]["profiles"]["Row"]>;
+        Relationships: never[];
       };
       google_connections: {
         Row: {
@@ -78,6 +85,7 @@ export interface Database {
           account_name: string;
         };
         Update: Partial<Database["public"]["Tables"]["google_connections"]["Row"]>;
+        Relationships: never[];
       };
       outlets: {
         Row: {
@@ -103,6 +111,7 @@ export interface Database {
           slug: string;
         };
         Update: Partial<Database["public"]["Tables"]["outlets"]["Row"]>;
+        Relationships: never[];
       };
       reviews: {
         Row: {
@@ -132,6 +141,7 @@ export interface Database {
           google_created_at: string;
         };
         Update: Partial<Database["public"]["Tables"]["reviews"]["Row"]>;
+        Relationships: never[];
       };
       review_categories: {
         Row: {
@@ -146,6 +156,7 @@ export interface Database {
           category: ReviewCategoryTag;
         };
         Update: Partial<Database["public"]["Tables"]["review_categories"]["Row"]>;
+        Relationships: never[];
       };
       alerts: {
         Row: {
@@ -169,6 +180,22 @@ export interface Database {
           message: string;
         };
         Update: Partial<Database["public"]["Tables"]["alerts"]["Row"]>;
+        Relationships: never[];
+      };
+      alert_settings: {
+        Row: {
+          id: boolean;
+          low_outlet_rating_threshold: number;
+          urgent_review_rating_threshold: number;
+          negative_spike_count: number;
+          negative_spike_window_hours: number;
+          rating_drop_threshold: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: Partial<Database["public"]["Tables"]["alert_settings"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["alert_settings"]["Row"]>;
+        Relationships: never[];
       };
       notification_preferences: {
         Row: {
@@ -185,8 +212,11 @@ export interface Database {
           user_id: string;
         };
         Update: Partial<Database["public"]["Tables"]["notification_preferences"]["Row"]>;
+        Relationships: never[];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
   };
 }
 

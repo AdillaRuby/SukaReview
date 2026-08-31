@@ -111,3 +111,57 @@ export function pickRandom<T>(arr: T[]): T {
 export function randomReviewerName(): string {
   return pickRandom(REVIEWER_NAMES);
 }
+
+export interface GeneratedDemoReview {
+  googleReviewId: string;
+  locationId: string;
+  reviewerName: string;
+  reviewerAvatar: string | null;
+  rating: 1 | 2 | 3 | 4 | 5;
+  comment: string | null;
+  googleCreatedAt: string;
+  sentiment: Sentiment;
+  categories: ReviewCategoryTag[];
+  aspects: Partial<Record<ReviewCategoryTag, Sentiment>>;
+  summary: string;
+  urgency: Urgency;
+}
+
+/**
+ * Generates a batch of plausible past reviews for one outlet, spread across
+ * the last `spreadDays` days (weighted toward more recent). Used by both the
+ * demo seed script and the "initial sync" simulation in demo mode.
+ */
+export function generateDemoReviewsForLocation(
+  locationId: string,
+  count: number,
+  spreadDays = 90
+): GeneratedDemoReview[] {
+  const reviews: GeneratedDemoReview[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const template = pickRandom(DEMO_REVIEW_TEMPLATES);
+    // Skew toward recent days: square the random factor.
+    const daysAgo = Math.floor(Math.random() ** 2 * spreadDays);
+    const createdAt = new Date();
+    createdAt.setDate(createdAt.getDate() - daysAgo);
+    createdAt.setHours(Math.floor(Math.random() * 14) + 8, Math.floor(Math.random() * 60));
+
+    reviews.push({
+      googleReviewId: `demo-review-${locationId.replace("locations/", "")}-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      locationId,
+      reviewerName: randomReviewerName(),
+      reviewerAvatar: null,
+      rating: template.rating,
+      comment: template.comment,
+      googleCreatedAt: createdAt.toISOString(),
+      sentiment: template.sentiment,
+      categories: template.categories,
+      aspects: template.aspects,
+      summary: template.summary,
+      urgency: template.urgency,
+    });
+  }
+
+  return reviews;
+}

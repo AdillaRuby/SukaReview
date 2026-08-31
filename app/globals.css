@@ -1,26 +1,146 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf5ec;
+  --surface: #ffffff;
+  --surface-hover: #f5eee0;
+  --border: #ecdfc7;
+  --border-strong: #ddc9a3;
+  --foreground: #2b2416;
+  --muted-foreground: #8a7c62;
+
+  --primary: #e8432e;
+  --primary-hover: #cf3520;
+  --primary-foreground: #fff8f5;
+
+  --accent: #f0a93e;
+  --accent-foreground: #2b1d06;
+
+  --positive: #6e9c3a;
+  --positive-bg: #eaf3dc;
+  --positive-foreground: #3f5c1f;
+
+  --neutral-status: #d9a61c;
+  --neutral-bg: #fbf0d2;
+  --neutral-foreground: #6b4e12;
+
+  --negative: #e23b3b;
+  --negative-bg: #fce8e6;
+  --negative-foreground: #9a2a1f;
+
+  --critical: #e2352e;
+  --high: #f0862e;
+  --medium: #f0b429;
+  --low: #7fa23d;
+
+  --radius: 0.85rem;
+
+  --shadow-sm: 0 1px 2px rgba(43, 36, 22, 0.06), 0 1px 1px rgba(43, 36, 22, 0.04);
+  --shadow-md: 0 8px 24px rgba(43, 36, 22, 0.08), 0 2px 6px rgba(43, 36, 22, 0.05);
+  --shadow-lg: 0 20px 48px rgba(43, 36, 22, 0.14), 0 6px 16px rgba(43, 36, 22, 0.08);
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-positive: var(--positive);
+  --color-positive-bg: var(--positive-bg);
+  --color-positive-foreground: var(--positive-foreground);
+
+  --color-neutral-status: var(--neutral-status);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-neutral-foreground: var(--neutral-foreground);
+
+  --color-negative: var(--negative);
+  --color-negative-bg: var(--negative-bg);
+  --color-negative-foreground: var(--negative-foreground);
+
+  --color-critical: var(--critical);
+  --color-high: var(--high);
+  --color-medium: var(--medium);
+  --color-low: var(--low);
+
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 6px);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-archivo);
+  --font-mono: var(--font-mono-sr);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+@keyframes review-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 500px;
+  }
+}
+
+.animate-review-enter {
+  animation: review-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
 }

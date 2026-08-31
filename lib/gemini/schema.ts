@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { REVIEW_CATEGORIES } from "@/lib/taxonomy";
+import type { ReviewCategoryTag } from "@/types/database";
 
 const categoryEnum = z.enum(
-  REVIEW_CATEGORIES as [string, ...string[]]
+  REVIEW_CATEGORIES as [ReviewCategoryTag, ...ReviewCategoryTag[]]
 );
 
 const sentimentEnum = z.enum(["positive", "neutral", "negative"]);
