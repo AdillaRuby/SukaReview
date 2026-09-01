@@ -30,13 +30,15 @@ export async function evaluateOutletAlerts({
     rating_drop_threshold: 0.3,
   };
 
-  const hasActiveAlert = async (type: AlertType) => {
-    const { count } = await supabase
+  const hasActiveAlert = async (type: AlertType, reviewId?: string) => {
+    let query = supabase
       .from("alerts")
       .select("id", { count: "exact", head: true })
       .eq("outlet_id", outletId)
       .eq("type", type)
       .eq("status", "active");
+    if (reviewId) query = query.eq("review_id", reviewId);
+    const { count } = await query;
     return (count ?? 0) > 0;
   };
 
@@ -58,8 +60,15 @@ export async function evaluateOutletAlerts({
     });
   };
 
-  // Rule 1: a single very-low review just came in.
-  if (triggerReviewId && triggerRating !== undefined && triggerRating <= thresholds.urgent_review_rating_threshold) {
+  // Rule 1: a single very-low review just came in. Deduped per review (not
+  // just per outlet) so a Pub/Sub redelivery or a reviewer editing their
+  // text doesn't re-raise the same alert on every UPDATED_REVIEW event.
+  if (
+    triggerReviewId &&
+    triggerRating !== undefined &&
+    triggerRating <= thresholds.urgent_review_rating_threshold &&
+    !(await hasActiveAlert("LOW_RATING_REVIEW", triggerReviewId))
+  ) {
     await createAlert({
       type: "LOW_RATING_REVIEW",
       severity: triggerRating === 1 ? "high" : "medium",

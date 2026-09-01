@@ -18,6 +18,7 @@ import {
 import { formatRelativeID } from "@/lib/format";
 
 interface Connection {
+  accountId: string;
   accountName: string;
   status: string;
   locationsCount: number;
@@ -49,9 +50,14 @@ export function GoogleConnectionCard({
   }
 
   async function handleDisconnect() {
+    if (!connection) return;
     setDisconnecting(true);
     try {
-      await fetch("/api/google/disconnect", { method: "POST" });
+      await fetch("/api/google/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: connection.accountId }),
+      });
       router.refresh();
     } finally {
       setDisconnecting(false);

@@ -22,11 +22,12 @@ export default async function SettingsPage() {
     const admin = createAdminClient();
     const { data } = await admin
       .from("google_connections")
-      .select("account_name, status, locations_count, last_sync_at")
+      .select("account_id, account_name, status, locations_count, last_sync_at")
       .eq("status", "connected")
       .maybeSingle();
     if (data) {
       connection = {
+        accountId: data.account_id,
         accountName: data.account_name,
         status: data.status,
         locationsCount: data.locations_count,

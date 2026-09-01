@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { OutletSummary } from "@/types/domain";
+import { escapeOrFilterValue } from "@/lib/utils";
 
 type Client = SupabaseClient<Database>;
 
@@ -43,7 +44,8 @@ async function withTodayCounts(supabase: Client, outlets: Database["public"]["Ta
 export async function getAllOutlets(supabase: Client, search?: string): Promise<OutletSummary[]> {
   let query = supabase.from("outlets").select("*").eq("is_active", true).order("name");
   if (search) {
-    query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%`);
+    const pattern = escapeOrFilterValue(`%${search}%`);
+    query = query.or(`name.ilike.${pattern},city.ilike.${pattern}`);
   }
   const { data, error } = await query;
   if (error) throw error;

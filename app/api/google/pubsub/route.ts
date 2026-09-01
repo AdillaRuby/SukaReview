@@ -36,11 +36,13 @@ function extractReviewId(reviewName?: string): string | undefined {
  */
 export async function POST(request: NextRequest) {
   const verificationToken = process.env.GOOGLE_PUBSUB_VERIFICATION_TOKEN;
-  if (verificationToken) {
-    const provided = request.nextUrl.searchParams.get("token");
-    if (provided !== verificationToken) {
-      return NextResponse.json({ error: "Invalid verification token" }, { status: 401 });
-    }
+  if (!verificationToken) {
+    console.error("[pubsub] GOOGLE_PUBSUB_VERIFICATION_TOKEN is not configured — rejecting push");
+    return NextResponse.json({ error: "Endpoint not configured" }, { status: 503 });
+  }
+  const provided = request.nextUrl.searchParams.get("token");
+  if (provided !== verificationToken) {
+    return NextResponse.json({ error: "Invalid verification token" }, { status: 401 });
   }
 
   let body: PubSubPushBody;

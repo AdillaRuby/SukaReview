@@ -37,6 +37,10 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
     .from("google_connections")
     .update({
       encrypted_access_token: encryptToken(refreshed.accessToken),
+      // Google may rotate the refresh token on any refresh call; persist it
+      // whenever one comes back, or the stored one goes stale and the next
+      // refresh fails with invalid_grant.
+      ...(refreshed.refreshToken ? { encrypted_refresh_token: encryptToken(refreshed.refreshToken) } : {}),
       token_expires_at: refreshed.expiresAt,
     })
     .eq("id", connection.id);

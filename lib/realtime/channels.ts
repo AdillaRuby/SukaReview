@@ -22,6 +22,19 @@ export function subscribeToRealtimeChannels(
   supabase: SupabaseClient<Database>,
   onStatusChange: (status: "live" | "reconnecting" | "offline") => void
 ): () => void {
+  // Tracked per-channel so a single channel erroring out (e.g. alerts or
+  // outlets) can't be masked by the other two still reporting SUBSCRIBED —
+  // "live" is only reported once every channel is actually connected.
+  const channelStatuses = new Map<string, string>();
+
+  function handleStatus(channel: string, status: string) {
+    channelStatuses.set(channel, status);
+    const statuses = Array.from(channelStatuses.values());
+    if (statuses.every((s) => s === "SUBSCRIBED")) onStatusChange("live");
+    else if (statuses.some((s) => s === "CLOSED")) onStatusChange("offline");
+    else onStatusChange("reconnecting");
+  }
+
   const reviewsChannel = supabase
     .channel("reviews:feed", { config: { private: true } })
     .on("broadcast", { event: "INSERT" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["reviews"]["Row"]>) => {
@@ -30,7 +43,7 @@ export function subscribeToRealtimeChannels(
     .on("broadcast", { event: "UPDATE" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["reviews"]["Row"]>) => {
       realtimeBus.emit("review-update", msg.payload.new);
     })
-    .subscribe((status) => handleStatus(status));
+    .subscribe((status) => handleStatus("reviews", status));
 
   const alertsChannel = supabase
     .channel("alerts:feed", { config: { private: true } })
@@ -40,23 +53,14 @@ export function subscribeToRealtimeChannels(
     .on("broadcast", { event: "UPDATE" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["alerts"]["Row"]>) => {
       realtimeBus.emit("alert-update", msg.payload.new);
     })
-    .subscribe();
+    .subscribe((status) => handleStatus("alerts", status));
 
   const outletsChannel = supabase
     .channel("outlets:feed", { config: { private: true } })
     .on("broadcast", { event: "UPDATE" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["outlets"]["Row"]>) => {
       realtimeBus.emit("outlet-update", msg.payload.new);
     })
-    .subscribe();
-
-  const channelStatuses = new Map<string, string>();
-
-  function handleStatus(status: string) {
-    channelStatuses.set("reviews", status);
-    if (status === "SUBSCRIBED") onStatusChange("live");
-    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") onStatusChange("reconnecting");
-    else if (status === "CLOSED") onStatusChange("offline");
-  }
+    .subscribe((status) => handleStatus("outlets", status));
 
   return () => {
     supabase.removeChannel(reviewsChannel);

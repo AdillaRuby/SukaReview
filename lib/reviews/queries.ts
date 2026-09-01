@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewCategoryTag, Sentiment } from "@/types/database";
 import type { ReviewWithRelations } from "@/types/domain";
+import { escapeOrFilterValue } from "@/lib/utils";
 
 type Client = SupabaseClient<Database>;
 
@@ -108,7 +109,8 @@ export async function getReviewsPage(supabase: Client, filters: ReviewFilters): 
   let query = supabase.from("reviews").select(REVIEW_SELECT, { count: "exact" });
 
   if (filters.search) {
-    query = query.or(`comment.ilike.%${filters.search}%,reviewer_name.ilike.%${filters.search}%`);
+    const pattern = escapeOrFilterValue(`%${filters.search}%`);
+    query = query.or(`comment.ilike.${pattern},reviewer_name.ilike.${pattern}`);
   }
   if (filters.outletId) query = query.eq("outlet_id", filters.outletId);
   if (filters.rating) query = query.eq("rating", filters.rating);

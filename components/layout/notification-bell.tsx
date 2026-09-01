@@ -9,6 +9,15 @@ export function NotificationBell({ initialActiveCount }: { initialActiveCount: n
   const [count, setCount] = useState(initialActiveCount);
 
   useEffect(() => {
+    // Resyncs with the server-computed count on every re-render with a new
+    // prop (e.g. after router.refresh()) — useState's initial value only
+    // applies at mount, so without this the badge goes stale once a bus
+    // event is missed.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCount(initialActiveCount);
+  }, [initialActiveCount]);
+
+  useEffect(() => {
     const offInsert = realtimeBus.on("alert-insert", () => setCount((c) => c + 1));
     const offUpdate = realtimeBus.on("alert-update", (alert) => {
       if (alert.status === "resolved") setCount((c) => Math.max(0, c - 1));

@@ -25,15 +25,22 @@ export async function getDashboardKpis(supabase: Client): Promise<DashboardKpis>
   const todayStart = startOfDay(0).toISOString();
   const yesterdayStart = startOfDay(1).toISOString();
   const weekAgoStart = startOfDay(7).toISOString();
+  const twoWeeksAgoStart = startOfDay(14).toISOString();
 
-  const [{ count: reviewsToday }, { count: reviewsYesterday }, { data: weekOldReviews }] = await Promise.all([
+  const [
+    { count: reviewsToday },
+    { count: reviewsYesterday },
+    { data: recentWeekReviews },
+    { data: priorWeekReviews },
+  ] = await Promise.all([
     supabase.from("reviews").select("id", { count: "exact", head: true }).gte("google_created_at", todayStart),
     supabase
       .from("reviews")
       .select("id", { count: "exact", head: true })
       .gte("google_created_at", yesterdayStart)
       .lt("google_created_at", todayStart),
-    supabase.from("reviews").select("rating").gte("google_created_at", weekAgoStart).lt("google_created_at", todayStart),
+    supabase.from("reviews").select("rating").gte("google_created_at", weekAgoStart),
+    supabase.from("reviews").select("rating").gte("google_created_at", twoWeeksAgoStart).lt("google_created_at", weekAgoStart),
   ]);
 
   const { count: negativeToday } = await supabase
@@ -42,10 +49,14 @@ export async function getDashboardKpis(supabase: Client): Promise<DashboardKpis>
     .gte("google_created_at", todayStart)
     .lte("rating", 2);
 
+  // Both sides of the delta are review-weighted averages over comparable
+  // windows (recent 7d vs the 7d before that) — comparing against
+  // `overallRating` here would mix an unweighted per-outlet average with a
+  // review-weighted one and produce a meaningless number.
   let overallRatingDeltaWeek: number | null = null;
-  if (weekOldReviews && weekOldReviews.length >= 5) {
-    const weekAgoAvg = weekOldReviews.reduce((s, r) => s + r.rating, 0) / weekOldReviews.length;
-    overallRatingDeltaWeek = Math.round((overallRating - weekAgoAvg) * 10) / 10;
+  if (recentWeekReviews && priorWeekReviews && recentWeekReviews.length >= 5 && priorWeekReviews.length >= 5) {
+    const avg = (rows: { rating: number }[]) => rows.reduce((s, r) => s + r.rating, 0) / rows.length;
+    overallRatingDeltaWeek = Math.round((avg(recentWeekReviews) - avg(priorWeekReviews)) * 10) / 10;
   }
 
   return {

@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/settings?error=invalid_state", appUrl));
   }
 
+  const supabase = createAdminClient();
+  let connectedAccountId: string | undefined;
+
   try {
     const tokens = await exchangeCodeForTokens(code);
     const accounts = await listGoogleAccounts(tokens.accessToken);
@@ -26,7 +29,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/settings?error=no_account", appUrl));
     }
 
-    const supabase = createAdminClient();
+    connectedAccountId = account.accountId;
+
     await supabase.from("google_connections").upsert(
       {
         account_id: account.accountId,
@@ -48,6 +52,22 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (err) {
     console.error("[google-oauth] callback failed:", err);
+
+    // The connection row may already be sitting at status "syncing" from the
+    // upsert above — leaving it there hides the account from every query that
+    // filters on status "connected" with no way to retry short of a manual
+    // DB edit, so bring it back to a visible, retriable state.
+    if (connectedAccountId) {
+      await supabase
+        .from("google_connections")
+        .update({
+          status: "error",
+          last_sync_status: "failed",
+          last_error: err instanceof Error ? err.message : String(err),
+        })
+        .eq("account_id", connectedAccountId);
+    }
+
     return NextResponse.redirect(new URL("/settings?error=sync_failed", appUrl));
   }
 }
