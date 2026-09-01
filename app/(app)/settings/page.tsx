@@ -40,7 +40,7 @@ export default async function SettingsPage() {
 
   const { data: placesSyncRow } = await admin
     .from("places_sync_state")
-    .select("last_synced_at, last_status, last_error, new_reviews_found")
+    .select("last_synced_at, last_status, last_error, outlets_synced, new_reviews_found")
     .eq("id", true)
     .maybeSingle();
 
@@ -68,6 +68,7 @@ export default async function SettingsPage() {
                 lastSyncedAt: placesSyncRow.last_synced_at,
                 lastStatus: placesSyncRow.last_status,
                 lastError: placesSyncRow.last_error,
+                outletsSynced: placesSyncRow.outlets_synced,
                 newReviewsFound: placesSyncRow.new_reviews_found,
               }
             : null

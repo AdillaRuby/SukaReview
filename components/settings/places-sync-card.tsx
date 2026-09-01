@@ -14,6 +14,7 @@ interface PlacesSyncStateSummary {
   lastStatus: PlacesSyncStatus;
   lastError: string | null;
   newReviewsFound: number;
+  outletsSynced: number;
 }
 
 export function PlacesSyncCard({
@@ -40,7 +41,17 @@ export function PlacesSyncCard({
     }
   }
 
-  const failed = state?.lastStatus === "failed";
+  const STALE_RUNNING_MS = 10 * 60 * 1000;
+  // Staleness is a wall-clock comparison by definition; server data (lastSyncedAt) is
+  // refreshed via router.refresh(), not re-render, so this is safe despite being impure.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const isStaleRunning =
+    state?.lastStatus === "running" &&
+    state.lastSyncedAt !== null &&
+    now - new Date(state.lastSyncedAt).getTime() > STALE_RUNNING_MS;
+  const failed = state?.lastStatus === "failed" || isStaleRunning;
+  const isRunning = state?.lastStatus === "running" && !isStaleRunning;
 
   return (
     <Card>
@@ -49,8 +60,8 @@ export function PlacesSyncCard({
           <CardTitle>Google Places Review Sync</CardTitle>
           <CardDescription>Sumber data alternatif tanpa perlu akses Manager Google Business Profile.</CardDescription>
         </div>
-        <Badge variant={!configured ? "outline" : failed ? "negative" : "positive"}>
-          {!configured ? "BELUM DIKONFIGURASI" : failed ? "SYNC GAGAL" : "AKTIF"}
+        <Badge variant={!configured ? "outline" : failed ? "negative" : isRunning ? "neutral" : "positive"}>
+          {!configured ? "BELUM DIKONFIGURASI" : failed ? "SYNC GAGAL" : isRunning ? "SEDANG SYNC..." : "AKTIF"}
         </Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -62,10 +73,14 @@ export function PlacesSyncCard({
         )}
 
         {configured && (
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <div>
               <p className="text-xs text-muted-foreground">Outlet Terhubung</p>
               <p className="text-foreground">{linkedOutlets}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Outlet Ter-sync (Terakhir)</p>
+              <p className="text-foreground">{state?.outletsSynced ?? 0}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Sync Terakhir</p>
@@ -78,7 +93,7 @@ export function PlacesSyncCard({
           </div>
         )}
 
-        {configured && failed && state?.lastError && <p className="text-xs text-negative">{state.lastError}</p>}
+        {configured && state?.lastError && <p className="text-xs text-negative">{state.lastError}</p>}
 
         {!canManage && <p className="text-xs text-muted-foreground">Hanya owner/admin yang dapat menjalankan sync.</p>}
 

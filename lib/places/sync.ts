@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestGoogleReview, processIngestedReview } from "@/lib/reviews/ingest-review";
+import type { IngestResult } from "@/lib/reviews/ingest-review";
 import { getPlaceDetails } from "./client";
+import type { GoogleReview } from "@/types/google";
 
 export interface PlacesSyncOutletError {
   outletId: string;
@@ -46,12 +48,17 @@ export async function runPlacesSync(): Promise<PlacesSyncSummary> {
     try {
       const details = await getPlaceDetails(outlet.google_place_id);
 
+      // Ingest every review first. This internally recomputes
+      // current_rating from whatever's stored so far — an incidental,
+      // wrong value for a Places-sourced outlet — so we deliberately
+      // overwrite it with the Places-authoritative numbers below BEFORE
+      // any processIngestedReview call, since evaluateOutletAlerts reads
+      // outlets.current_rating fresh from the DB and must never see the
+      // recompute-derived value here.
+      const newlyIngested: { result: IngestResult; review: GoogleReview }[] = [];
       for (const review of details.reviews) {
         const result = await ingestGoogleReview(outlet.id, review);
-        if (result.isNew) {
-          newReviewsFound += 1;
-          await processIngestedReview(result, outlet.name, review.starRating);
-        }
+        if (result.isNew) newlyIngested.push({ result, review });
       }
 
       if (details.rating !== null && details.userRatingCount !== null) {
@@ -63,6 +70,11 @@ export async function runPlacesSync(): Promise<PlacesSyncSummary> {
         if (updateError) {
           throw new Error(`Failed to update outlet rating: ${updateError.message}`);
         }
+      }
+
+      for (const { result, review } of newlyIngested) {
+        newReviewsFound += 1;
+        await processIngestedReview(result, outlet.name, review.starRating);
       }
 
       outletsProcessed += 1;

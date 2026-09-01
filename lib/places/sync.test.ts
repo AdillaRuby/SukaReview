@@ -138,4 +138,29 @@ describe("runPlacesSync", () => {
       message: expect.stringContaining("Failed to update outlet rating"),
     });
   });
+
+  it("updates the outlet's Places-authoritative rating BEFORE processing any new review, so alert evaluation never reads a recompute-polluted rating", async () => {
+    const { updateCalls, client } = mockSupabase([{ id: "o1", name: "Outlet 1", google_place_id: "place-1" }]);
+    mockCreateAdminClient.mockReturnValue(client);
+
+    mockGetPlaceDetails.mockResolvedValue({
+      rating: 4.7,
+      userRatingCount: 200,
+      reviews: [
+        { reviewId: "r-new", locationId: "places/place-1", reviewer: { displayName: "A", photoUrl: null }, starRating: 5, comment: null, createTime: "t", updateTime: "t" },
+      ],
+    });
+    mockIngestGoogleReview.mockResolvedValue({ reviewId: "id-new", outletId: "o1", isNew: true });
+    mockProcessIngestedReview.mockImplementation(async () => {
+      updateCalls.push({ table: "processIngestedReview", values: {} });
+    });
+
+    const { runPlacesSync } = await import("./sync");
+    await runPlacesSync();
+
+    const outletsUpdateIndex = updateCalls.findIndex((c) => c.table === "outlets");
+    const processIndex = updateCalls.findIndex((c) => c.table === "processIngestedReview");
+    expect(outletsUpdateIndex).toBeGreaterThanOrEqual(0);
+    expect(processIndex).toBeGreaterThan(outletsUpdateIndex);
+  });
 });

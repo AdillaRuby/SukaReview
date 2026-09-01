@@ -3,9 +3,14 @@ import { getCurrentProfile, canManage } from "@/lib/auth/get-current-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPlacesSync, type PlacesSyncSummary } from "@/lib/places/sync";
 
+export const maxDuration = 60; // Hobby-plan-safe ceiling for the sync run.
+
 async function performSync(): Promise<PlacesSyncSummary> {
   const supabase = createAdminClient();
-  await supabase.from("places_sync_state").update({ last_status: "running" }).eq("id", true);
+  await supabase
+    .from("places_sync_state")
+    .update({ last_status: "running", last_synced_at: new Date().toISOString() })
+    .eq("id", true);
 
   try {
     const summary = await runPlacesSync();
