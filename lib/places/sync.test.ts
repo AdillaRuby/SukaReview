@@ -16,7 +16,11 @@ interface FakeOutlet {
   google_place_id: string | null;
 }
 
-function mockSupabase(outlets: FakeOutlet[]) {
+interface MockSupabaseOptions {
+  updateErrorForOutletId?: string;
+}
+
+function mockSupabase(outlets: FakeOutlet[], options: MockSupabaseOptions = {}) {
   const updateCalls: { table: string; values: Record<string, unknown> }[] = [];
   return {
     client: {
@@ -26,8 +30,11 @@ function mockSupabase(outlets: FakeOutlet[]) {
             eq: async () => ({ data: outlets, error: null }),
           }),
           update: (values: Record<string, unknown>) => ({
-            eq: async () => {
+            eq: async (field: string, id: string) => {
               updateCalls.push({ table, values });
+              if (options.updateErrorForOutletId === id) {
+                return { data: null, error: { message: "Database constraint violation" } };
+              }
               return { data: null, error: null };
             },
           }),
@@ -104,5 +111,31 @@ describe("runPlacesSync", () => {
     expect(mockGetPlaceDetails).not.toHaveBeenCalled();
     expect(summary.outletsSkippedNoPlaceId).toBe(1);
     expect(summary.outletsProcessed).toBe(0);
+  });
+
+  it("records an error and does not count the outlet as processed when the rating update fails", async () => {
+    const { client } = mockSupabase(
+      [
+        { id: "o1", name: "Outlet 1", google_place_id: "place-1" },
+        { id: "o2", name: "Outlet 2", google_place_id: "place-2" },
+      ],
+      { updateErrorForOutletId: "o1" }
+    );
+    mockCreateAdminClient.mockReturnValue(client);
+
+    mockGetPlaceDetails
+      .mockResolvedValueOnce({ rating: 4.7, userRatingCount: 200, reviews: [] })
+      .mockResolvedValueOnce({ rating: 4.0, userRatingCount: 50, reviews: [] });
+
+    const { runPlacesSync } = await import("./sync");
+    const summary = await runPlacesSync();
+
+    expect(summary.outletsProcessed).toBe(1);
+    expect(summary.errors).toHaveLength(1);
+    expect(summary.errors[0]).toMatchObject({
+      outletId: "o1",
+      outletName: "Outlet 1",
+      message: expect.stringContaining("Failed to update outlet rating"),
+    });
   });
 });

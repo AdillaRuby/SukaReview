@@ -55,10 +55,14 @@ export async function runPlacesSync(): Promise<PlacesSyncSummary> {
       }
 
       if (details.rating !== null && details.userRatingCount !== null) {
-        await supabase
+        const { error: updateError } = await supabase
           .from("outlets")
           .update({ current_rating: details.rating, total_reviews: details.userRatingCount })
           .eq("id", outlet.id);
+
+        if (updateError) {
+          throw new Error(`Failed to update outlet rating: ${updateError.message}`);
+        }
       }
 
       outletsProcessed += 1;
