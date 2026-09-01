@@ -6,6 +6,7 @@ import { GoogleConnectionCard } from "@/components/settings/google-connection-ca
 import { NotificationSettingsCard } from "@/components/settings/notification-settings-card";
 import { UsersManagement } from "@/components/settings/users-management";
 import { SystemSettingsCard } from "@/components/settings/system-settings-card";
+import { PlacesSyncCard } from "@/components/settings/places-sync-card";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -17,9 +18,10 @@ export default async function SettingsPage() {
 
   const { data: users } = await supabase.from("profiles").select("id, full_name, email, role").order("created_at");
 
+  const admin = createAdminClient();
+
   let connection = null;
   if (canManageSettings && !isDemoMode) {
-    const admin = createAdminClient();
     const { data } = await admin
       .from("google_connections")
       .select("account_id, account_name, status, locations_count, last_sync_at")
@@ -36,6 +38,17 @@ export default async function SettingsPage() {
     }
   }
 
+  const { data: placesSyncRow } = await admin
+    .from("places_sync_state")
+    .select("last_synced_at, last_status, last_error, new_reviews_found")
+    .eq("id", true)
+    .maybeSingle();
+
+  const { count: placesLinkedOutlets } = await admin
+    .from("outlets")
+    .select("id", { count: "exact", head: true })
+    .not("google_place_id", "is", null);
+
   const { data: alertSettings } = await supabase.from("alert_settings").select("*").single();
 
   return (
@@ -46,6 +59,22 @@ export default async function SettingsPage() {
       </div>
 
       <GoogleConnectionCard isDemoMode={isDemoMode} connection={connection} canManageConnection={canManageSettings} />
+
+      <PlacesSyncCard
+        configured={!!process.env.GOOGLE_PLACES_API_KEY}
+        state={
+          placesSyncRow
+            ? {
+                lastSyncedAt: placesSyncRow.last_synced_at,
+                lastStatus: placesSyncRow.last_status,
+                lastError: placesSyncRow.last_error,
+                newReviewsFound: placesSyncRow.new_reviews_found,
+              }
+            : null
+        }
+        linkedOutlets={placesLinkedOutlets ?? 0}
+        canManage={canManageSettings}
+      />
 
       <NotificationSettingsCard />
 
