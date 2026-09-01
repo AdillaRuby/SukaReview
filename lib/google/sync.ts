@@ -5,7 +5,7 @@ import { configureReviewNotifications } from "./notifications";
 import { ingestGoogleReview, processIngestedReview } from "@/lib/reviews/ingest-review";
 import { recomputeOutletStats } from "@/lib/outlets/recompute-stats";
 
-function slugify(name: string): string {
+export function slugify(name: string): string {
   return name
     .toLowerCase()
     .replace(/suka shawarma/i, "")

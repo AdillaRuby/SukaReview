@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
+    "resolve-places": "tsx scripts/resolve-places.ts",
     "test": "vitest run"
   },
   "dependencies": {
