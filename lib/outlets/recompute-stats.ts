@@ -1,7 +1,29 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { OutletStatus } from "@/types/database";
 
 const CRITICAL_NEGATIVE_24H = 4;
 const ATTENTION_NEGATIVE_24H = 2;
+
+/** Derives operational status from current rating + recent low-rating volume. */
+export function deriveOutletStatus(currentRating: number, negative24hCount: number): OutletStatus {
+  if (negative24hCount >= CRITICAL_NEGATIVE_24H) return "critical";
+  if (negative24hCount >= ATTENTION_NEGATIVE_24H) return "attention";
+  if (currentRating > 0 && currentRating < 4.0) return "watch";
+  return "good";
+}
+
+/** Count of rating<=2 reviews for an outlet in the last 24 hours. */
+export async function getNegative24hCount(outletId: string): Promise<number> {
+  const supabase = createAdminClient();
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await supabase
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("outlet_id", outletId)
+    .lte("rating", 2)
+    .gte("google_created_at", since24h);
+  return count ?? 0;
+}
 
 /**
  * Recomputes an outlet's current_rating/total_reviews from its reviews, and
@@ -21,19 +43,8 @@ export async function recomputeOutletStats(outletId: string): Promise<void> {
     ? Math.round((reviews!.reduce((sum, r) => sum + r.rating, 0) / totalReviews) * 10) / 10
     : 0;
 
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count: negative24h } = await supabase
-    .from("reviews")
-    .select("id", { count: "exact", head: true })
-    .eq("outlet_id", outletId)
-    .lte("rating", 2)
-    .gte("google_created_at", since24h);
-
-  const negCount = negative24h ?? 0;
-  let status: "good" | "watch" | "attention" | "critical" = "good";
-  if (negCount >= CRITICAL_NEGATIVE_24H) status = "critical";
-  else if (negCount >= ATTENTION_NEGATIVE_24H) status = "attention";
-  else if (currentRating > 0 && currentRating < 4.0) status = "watch";
+  const negCount = await getNegative24hCount(outletId);
+  const status = deriveOutletStatus(currentRating, negCount);
 
   await supabase
     .from("outlets")

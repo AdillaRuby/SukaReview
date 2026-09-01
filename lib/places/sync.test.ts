@@ -10,6 +10,13 @@ vi.mock("@/lib/reviews/ingest-review", () => ({
   processIngestedReview: mockProcessIngestedReview,
 }));
 
+const mockGetNegative24hCount = vi.fn();
+const mockDeriveOutletStatus = vi.fn();
+vi.mock("@/lib/outlets/recompute-stats", () => ({
+  getNegative24hCount: mockGetNegative24hCount,
+  deriveOutletStatus: mockDeriveOutletStatus,
+}));
+
 interface FakeOutlet {
   id: string;
   name: string;
@@ -56,6 +63,8 @@ describe("runPlacesSync", () => {
   it("processes new reviews through the pipeline and skips already-seen ones", async () => {
     const { updateCalls, client } = mockSupabase([{ id: "o1", name: "Outlet 1", google_place_id: "place-1" }]);
     mockCreateAdminClient.mockReturnValue(client);
+    mockGetNegative24hCount.mockResolvedValue(0);
+    mockDeriveOutletStatus.mockReturnValue("good");
 
     mockGetPlaceDetails.mockResolvedValue({
       rating: 4.7,
@@ -80,7 +89,7 @@ describe("runPlacesSync", () => {
     expect(summary.errors).toEqual([]);
 
     const ratingUpdate = updateCalls.find((c) => c.table === "outlets");
-    expect(ratingUpdate?.values).toEqual({ current_rating: 4.7, total_reviews: 200 });
+    expect(ratingUpdate?.values).toEqual({ current_rating: 4.7, total_reviews: 200, status: "good" });
   });
 
   it("continues to the next outlet when one outlet's Places lookup fails", async () => {
@@ -122,6 +131,8 @@ describe("runPlacesSync", () => {
       { updateErrorForOutletId: "o1" }
     );
     mockCreateAdminClient.mockReturnValue(client);
+    mockGetNegative24hCount.mockResolvedValue(0);
+    mockDeriveOutletStatus.mockReturnValue("good");
 
     mockGetPlaceDetails
       .mockResolvedValueOnce({ rating: 4.7, userRatingCount: 200, reviews: [] })
@@ -142,6 +153,8 @@ describe("runPlacesSync", () => {
   it("updates the outlet's Places-authoritative rating BEFORE processing any new review, so alert evaluation never reads a recompute-polluted rating", async () => {
     const { updateCalls, client } = mockSupabase([{ id: "o1", name: "Outlet 1", google_place_id: "place-1" }]);
     mockCreateAdminClient.mockReturnValue(client);
+    mockGetNegative24hCount.mockResolvedValue(0);
+    mockDeriveOutletStatus.mockReturnValue("good");
 
     mockGetPlaceDetails.mockResolvedValue({
       rating: 4.7,

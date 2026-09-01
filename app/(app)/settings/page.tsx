@@ -40,13 +40,14 @@ export default async function SettingsPage() {
 
   const { data: placesSyncRow } = await admin
     .from("places_sync_state")
-    .select("last_synced_at, last_status, last_error, outlets_synced, new_reviews_found")
+    .select("last_synced_at, last_status, last_error, outlets_synced, new_reviews_found, updated_at")
     .eq("id", true)
     .maybeSingle();
 
   const { count: placesLinkedOutlets } = await admin
     .from("outlets")
     .select("id", { count: "exact", head: true })
+    .eq("is_active", true)
     .not("google_place_id", "is", null);
 
   const { data: alertSettings } = await supabase.from("alert_settings").select("*").single();
@@ -70,6 +71,7 @@ export default async function SettingsPage() {
                 lastError: placesSyncRow.last_error,
                 outletsSynced: placesSyncRow.outlets_synced,
                 newReviewsFound: placesSyncRow.new_reviews_found,
+                updatedAt: placesSyncRow.updated_at,
               }
             : null
         }

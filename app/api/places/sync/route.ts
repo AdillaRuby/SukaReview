@@ -9,7 +9,7 @@ async function performSync(): Promise<PlacesSyncSummary> {
   const supabase = createAdminClient();
   await supabase
     .from("places_sync_state")
-    .update({ last_status: "running", last_synced_at: new Date().toISOString() })
+    .update({ last_status: "running", last_error: null })
     .eq("id", true);
 
   try {
@@ -35,7 +35,7 @@ async function performSync(): Promise<PlacesSyncSummary> {
     const message = err instanceof Error ? err.message : "Sync failed";
     await supabase
       .from("places_sync_state")
-      .update({ last_status: "failed", last_error: message.slice(0, 500) })
+      .update({ last_status: "failed", last_error: message.slice(0, 500), outlets_synced: 0, new_reviews_found: 0 })
       .eq("id", true);
     throw err;
   }

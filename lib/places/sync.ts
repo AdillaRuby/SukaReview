@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestGoogleReview, processIngestedReview } from "@/lib/reviews/ingest-review";
 import type { IngestResult } from "@/lib/reviews/ingest-review";
 import { getPlaceDetails } from "./client";
+import { deriveOutletStatus, getNegative24hCount } from "@/lib/outlets/recompute-stats";
 import type { GoogleReview } from "@/types/google";
 
 export interface PlacesSyncOutletError {
@@ -62,9 +63,12 @@ export async function runPlacesSync(): Promise<PlacesSyncSummary> {
       }
 
       if (details.rating !== null && details.userRatingCount !== null) {
+        const negCount = await getNegative24hCount(outlet.id);
+        const status = deriveOutletStatus(details.rating, negCount);
+
         const { error: updateError } = await supabase
           .from("outlets")
-          .update({ current_rating: details.rating, total_reviews: details.userRatingCount })
+          .update({ current_rating: details.rating, total_reviews: details.userRatingCount, status })
           .eq("id", outlet.id);
 
         if (updateError) {

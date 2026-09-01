@@ -15,6 +15,7 @@ interface PlacesSyncStateSummary {
   lastError: string | null;
   newReviewsFound: number;
   outletsSynced: number;
+  updatedAt: string;
 }
 
 export function PlacesSyncCard({
@@ -42,14 +43,12 @@ export function PlacesSyncCard({
   }
 
   const STALE_RUNNING_MS = 10 * 60 * 1000;
-  // Staleness is a wall-clock comparison by definition; server data (lastSyncedAt) is
+  // Staleness is a wall-clock comparison by definition; server data (state.updatedAt) is
   // refreshed via router.refresh(), not re-render, so this is safe despite being impure.
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const isStaleRunning =
-    state?.lastStatus === "running" &&
-    state.lastSyncedAt !== null &&
-    now - new Date(state.lastSyncedAt).getTime() > STALE_RUNNING_MS;
+    state?.lastStatus === "running" && now - new Date(state.updatedAt).getTime() > STALE_RUNNING_MS;
   const failed = state?.lastStatus === "failed" || isStaleRunning;
   const isRunning = state?.lastStatus === "running" && !isStaleRunning;
 
