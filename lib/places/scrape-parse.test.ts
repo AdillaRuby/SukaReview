@@ -70,4 +70,26 @@ describe("parseRelativeTimeToISO", () => {
   it("returns null for an unrecognized format", () => {
     expect(parseRelativeTimeToISO("last Tuesday", now)).toBeNull();
   });
+
+  it("parses the English 'a <unit> ago' form as 1 unit", () => {
+    expect(parseRelativeTimeToISO("a month ago", now)).toBe(
+      new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    );
+  });
+
+  it("parses the English 'an <unit> ago' form as 1 unit", () => {
+    expect(parseRelativeTimeToISO("an hour ago", now)).toBe(new Date(now.getTime() - 60 * 60 * 1000).toISOString());
+  });
+
+  it("parses the English 'N <unit>s ago' plural form", () => {
+    expect(parseRelativeTimeToISO("5 months ago", now)).toBe(
+      new Date(now.getTime() - 5 * 30 * 24 * 60 * 60 * 1000).toISOString()
+    );
+  });
+
+  it("parses English days", () => {
+    expect(parseRelativeTimeToISO("3 days ago", now)).toBe(
+      new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    );
+  });
 });

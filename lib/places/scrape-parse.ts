@@ -37,7 +37,7 @@ export function parseReviewStars(ariaLabel: string): 1 | 2 | 3 | 4 | 5 | null {
   return stars as 1 | 2 | 3 | 4 | 5;
 }
 
-const UNIT_MS: Record<string, number> = {
+const ID_UNIT_MS: Record<string, number> = {
   menit: 60 * 1000,
   jam: 60 * 60 * 1000,
   hari: 24 * 60 * 60 * 1000,
@@ -46,20 +46,40 @@ const UNIT_MS: Record<string, number> = {
   tahun: 365 * 24 * 60 * 60 * 1000,
 };
 
+const EN_UNIT_MS: Record<string, number> = {
+  minute: 60 * 1000,
+  hour: 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+  year: 365 * 24 * 60 * 60 * 1000,
+};
+
 /**
- * "sebulan lalu" / "5 bulan lalu" -> approximate ISO timestamp. Google Maps
- * never exposes an absolute review date in the DOM, so this is inherently
- * an approximation (day-level precision lost) — acceptable for trend
- * charts, not for anything needing an exact date.
+ * "sebulan lalu" / "5 bulan lalu" / "a month ago" / "5 months ago" ->
+ * approximate ISO timestamp. Google Maps never exposes an absolute review
+ * date in the DOM, so this is inherently an approximation (day-level
+ * precision lost) — acceptable for trend charts, not for anything needing
+ * an exact date. English fallback exists because Google's locale
+ * detection can be swayed by server IP geolocation regardless of the
+ * Accept-Language header the scraper sends.
  */
 export function parseRelativeTimeToISO(text: string, now: Date = new Date()): string | null {
   const trimmed = text.trim().toLowerCase();
-  const match = trimmed.match(/^(se|\d+)\s*(menit|jam|hari|minggu|bulan|tahun)\s*(?:yang\s+)?lalu$/);
-  if (!match) return null;
 
-  const amount = match[1] === "se" ? 1 : parseInt(match[1], 10);
-  const unitMs = UNIT_MS[match[2]];
-  if (!unitMs || Number.isNaN(amount)) return null;
+  const idMatch = trimmed.match(/^(se|\d+)\s*(menit|jam|hari|minggu|bulan|tahun)\s*(?:yang\s+)?lalu$/);
+  if (idMatch) {
+    const amount = idMatch[1] === "se" ? 1 : parseInt(idMatch[1], 10);
+    const unitMs = ID_UNIT_MS[idMatch[2]];
+    if (unitMs && !Number.isNaN(amount)) return new Date(now.getTime() - amount * unitMs).toISOString();
+  }
 
-  return new Date(now.getTime() - amount * unitMs).toISOString();
+  const enMatch = trimmed.match(/^(a|an|\d+)\s+(minute|hour|day|week|month|year)s?\s+ago$/);
+  if (enMatch) {
+    const amount = enMatch[1] === "a" || enMatch[1] === "an" ? 1 : parseInt(enMatch[1], 10);
+    const unitMs = EN_UNIT_MS[enMatch[2]];
+    if (unitMs && !Number.isNaN(amount)) return new Date(now.getTime() - amount * unitMs).toISOString();
+  }
+
+  return null;
 }

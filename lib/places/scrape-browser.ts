@@ -1,6 +1,7 @@
 import puppeteerCore from "puppeteer-core";
 import { addExtra } from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import type { Browser, Page } from "puppeteer-core";
 import type { PlaceDetails, PlaceSearchResult } from "@/types/places";
 import type { GoogleReview } from "@/types/google";
 import { parseAggregateRating, parseReviewStars, parseRelativeTimeToISO } from "./scrape-parse";
@@ -13,7 +14,7 @@ import { parseAggregateRating, parseReviewStars, parseRelativeTimeToISO } from "
 const puppeteer = addExtra(puppeteerCore);
 puppeteer.use(StealthPlugin());
 
-async function launchBrowser() {
+async function launchBrowser(): Promise<Browser> {
   if (process.env.VERCEL) {
     const chromium = (await import("@sparticuz/chromium")).default;
     return puppeteer.launch({
@@ -35,13 +36,11 @@ async function launchBrowser() {
   return puppeteer.launch({ executablePath: localExecutablePath, headless: true });
 }
 
-type LaunchedBrowser = Awaited<ReturnType<typeof launchBrowser>>;
-type LaunchedPage = Awaited<ReturnType<LaunchedBrowser["newPage"]>>;
-
-async function withBrowser<T>(fn: (page: LaunchedPage) => Promise<T>): Promise<T> {
+async function withBrowser<T>(fn: (page: Page) => Promise<T>): Promise<T> {
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800 });
     await page.setExtraHTTPHeaders({ "Accept-Language": "id-ID,id;q=0.9" });
     return await fn(page);
   } finally {
@@ -64,14 +63,14 @@ interface PlacePageBasics {
  * a search result) and scrapeGetPlaceDetails (after navigating directly to
  * a stored URL).
  */
-async function scrapePlacePageBasics(page: LaunchedPage): Promise<PlacePageBasics | null> {
+async function scrapePlacePageBasics(page: Page): Promise<PlacePageBasics | null> {
   const url = page.url();
   const latLngMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
 
   const raw = await page.evaluate(() => {
     const addressBtn = document.querySelector('[aria-label^="Alamat:"], [aria-label^="Address:"]');
     const ratingEl = document.querySelector(
-      'span[role="img"][aria-label*="bintang"], span[role="img"][aria-label*="star"]'
+      'span[role="img"][aria-label*="bintang" i][aria-label*="ulasan" i], span[role="img"][aria-label*="star" i][aria-label*="review" i]'
     );
     return {
       title: document.title,
@@ -145,6 +144,10 @@ export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDeta
   return withBrowser(async (page) => {
     await page.goto(placeUrl, { waitUntil: "networkidle2", timeout: 30000 });
 
+    if (/\/sorry\/|consent\.google\.com/.test(page.url())) {
+      throw new Error(`Blocked or CAPTCHA'd while scraping ${placeUrl} (redirected to ${page.url()})`);
+    }
+
     const basics = await scrapePlacePageBasics(page);
     if (!basics) {
       throw new Error(`Blocked or CAPTCHA'd while scraping ${placeUrl} (no page title found)`);
@@ -192,7 +195,8 @@ export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDeta
       const stars = parseReviewStars(raw.starAriaLabel);
       if (!stars) continue;
 
-      const timestamp = (raw.relativeTime && parseRelativeTimeToISO(raw.relativeTime)) ?? new Date().toISOString();
+      const parsedTime = raw.relativeTime ? parseRelativeTimeToISO(raw.relativeTime) : null;
+      const timestamp = parsedTime ?? new Date().toISOString();
 
       reviews.push({
         reviewId: raw.reviewId,
@@ -203,6 +207,12 @@ export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDeta
         createTime: timestamp,
         updateTime: timestamp,
       });
+    }
+
+    if (basics.rating === null && reviews.length === 0) {
+      throw new Error(
+        `Blocked, CAPTCHA'd, or markup changed while scraping ${placeUrl} (no rating and no reviews found)`
+      );
     }
 
     return {
