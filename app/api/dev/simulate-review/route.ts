@@ -26,14 +26,19 @@ export async function POST() {
     return NextResponse.json({ error: "No outlets found — run the seed script first" }, { status: 400 });
   }
 
-  const outlet = pickRandom(outlets);
+  const outletsWithLocationId = outlets.filter((o) => o.google_location_id !== null);
+  if (outletsWithLocationId.length === 0) {
+    return NextResponse.json({ error: "No outlets with google_location_id found — run the seed script first" }, { status: 400 });
+  }
+
+  const outlet = pickRandom(outletsWithLocationId);
   const template = pickRandom(DEMO_REVIEW_TEMPLATES);
   const reviewId = `demo-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const now = new Date().toISOString();
 
   const result = await ingestGoogleReview(outlet.id, {
     reviewId,
-    locationId: outlet.google_location_id,
+    locationId: outlet.google_location_id!,
     reviewer: { displayName: randomReviewerName(), photoUrl: null },
     starRating: template.rating,
     comment: template.comment,

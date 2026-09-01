@@ -34,7 +34,7 @@ export interface ReviewWithRelations {
 
 export interface OutletSummary {
   id: string;
-  googleLocationId: string;
+  googleLocationId: string | null;
   name: string;
   slug: string;
   city: string | null;

@@ -44,6 +44,8 @@ export type AlertStatus = "active" | "resolved";
 
 export type GoogleConnectionStatus = "connected" | "disconnected" | "error" | "syncing";
 
+export type PlacesSyncStatus = "idle" | "running" | "success" | "failed";
+
 export interface Database {
   public: {
     Tables: {
@@ -90,7 +92,7 @@ export interface Database {
       outlets: {
         Row: {
           id: string;
-          google_location_id: string;
+          google_location_id: string | null;
           google_place_id: string | null;
           name: string;
           slug: string;
@@ -106,7 +108,6 @@ export interface Database {
           updated_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["outlets"]["Row"]> & {
-          google_location_id: string;
           name: string;
           slug: string;
         };
@@ -195,6 +196,20 @@ export interface Database {
         };
         Insert: Partial<Database["public"]["Tables"]["alert_settings"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["alert_settings"]["Row"]>;
+        Relationships: never[];
+      };
+      places_sync_state: {
+        Row: {
+          id: boolean;
+          last_synced_at: string | null;
+          last_status: PlacesSyncStatus;
+          last_error: string | null;
+          outlets_synced: number;
+          new_reviews_found: number;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["places_sync_state"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["places_sync_state"]["Row"]>;
         Relationships: never[];
       };
       notification_preferences: {
