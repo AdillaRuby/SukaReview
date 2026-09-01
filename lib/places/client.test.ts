@@ -148,4 +148,44 @@ describe("lib/places/client", () => {
       userRatingCount: 340,
     });
   });
+
+  describe("mode switch", () => {
+    const mockScrapeSearchPlaceText = vi.fn();
+    const mockScrapeGetPlaceDetails = vi.fn();
+
+    beforeEach(() => {
+      mockScrapeSearchPlaceText.mockClear();
+      mockScrapeGetPlaceDetails.mockClear();
+      vi.doMock("./scrape-browser", () => ({
+        scrapeSearchPlaceText: mockScrapeSearchPlaceText,
+        scrapeGetPlaceDetails: mockScrapeGetPlaceDetails,
+      }));
+    });
+
+    afterEach(() => {
+      vi.doUnmock("./scrape-browser");
+      delete process.env.GOOGLE_PLACES_MODE;
+    });
+
+    it("delegates to the scraper when GOOGLE_PLACES_MODE=scrape", async () => {
+      process.env.GOOGLE_PLACES_MODE = "scrape";
+      mockScrapeGetPlaceDetails.mockResolvedValue({ rating: 4.5, userRatingCount: 10, reviews: [] });
+
+      const { getPlaceDetails } = await import("./client");
+      const result = await getPlaceDetails("https://www.google.com/maps/place/Example");
+
+      expect(mockScrapeGetPlaceDetails).toHaveBeenCalledWith("https://www.google.com/maps/place/Example");
+      expect(result).toEqual({ rating: 4.5, userRatingCount: 10, reviews: [] });
+    });
+
+    it("uses the Places API implementation when GOOGLE_PLACES_MODE is unset", async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as unknown as typeof fetch;
+
+      const { getPlaceDetails } = await import("./client");
+      await getPlaceDetails("ChIJabc");
+
+      expect(mockScrapeGetPlaceDetails).not.toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
+    });
+  });
 });

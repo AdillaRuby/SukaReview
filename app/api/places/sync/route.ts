@@ -3,7 +3,12 @@ import { getCurrentProfile, canManage } from "@/lib/auth/get-current-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPlacesSync, type PlacesSyncSummary } from "@/lib/places/sync";
 
-export const maxDuration = 60; // Hobby-plan-safe ceiling for the sync run.
+// Puppeteer page loads are much slower than a fetch call — scrape mode
+// needs more headroom than api mode. 300 requires at least a Vercel Pro
+// plan; if deploying scrape mode on Hobby, expect this route to time out
+// on larger outlet counts (the per-outlet try/catch in runPlacesSync means
+// a timeout mid-run still leaves already-processed outlets' data intact).
+export const maxDuration = process.env.GOOGLE_PLACES_MODE === "scrape" ? 300 : 60;
 
 async function performSync(): Promise<PlacesSyncSummary> {
   const supabase = createAdminClient();

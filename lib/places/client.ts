@@ -36,8 +36,8 @@ interface RawPlaceDetailsResponse {
   reviews?: RawPlaceReview[];
 }
 
-/** Fetches a place's aggregate rating/review count plus up to 5 reviews. */
-export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
+/** Fetches a place's aggregate rating/review count plus up to 5 reviews via the Places API. */
+async function apiGetPlaceDetails(placeId: string): Promise<PlaceDetails> {
   const res = await fetch(`${PLACES_BASE}/places/${placeId}`, {
     headers: {
       "X-Goog-Api-Key": apiKey(),
@@ -83,8 +83,8 @@ interface RawSearchTextResponse {
   }>;
 }
 
-/** Text Search — used only by scripts/resolve-places.ts to bootstrap outlets. */
-export async function searchPlaceText(query: string): Promise<PlaceSearchResult | null> {
+/** Text Search via the Places API — used only by scripts/resolve-places.ts to bootstrap outlets. */
+async function apiSearchPlaceText(query: string): Promise<PlaceSearchResult | null> {
   const res = await fetch(`${PLACES_BASE}/places:searchText`, {
     method: "POST",
     headers: {
@@ -113,4 +113,26 @@ export async function searchPlaceText(query: string): Promise<PlaceSearchResult 
     rating: first.rating ?? null,
     userRatingCount: first.userRatingCount ?? null,
   };
+}
+
+function isScrapeMode(): boolean {
+  return process.env.GOOGLE_PLACES_MODE === "scrape";
+}
+
+/** Fetches a place's aggregate rating/review count plus up to 5 reviews. */
+export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
+  if (isScrapeMode()) {
+    const { scrapeGetPlaceDetails } = await import("./scrape-browser");
+    return scrapeGetPlaceDetails(placeId);
+  }
+  return apiGetPlaceDetails(placeId);
+}
+
+/** Text Search — used only by scripts/resolve-places.ts to bootstrap outlets. */
+export async function searchPlaceText(query: string): Promise<PlaceSearchResult | null> {
+  if (isScrapeMode()) {
+    const { scrapeSearchPlaceText } = await import("./scrape-browser");
+    return scrapeSearchPlaceText(query);
+  }
+  return apiSearchPlaceText(query);
 }
