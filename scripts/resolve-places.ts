@@ -10,7 +10,7 @@ import { existsSync } from "fs";
 import { createInterface } from "readline/promises";
 import { createClient } from "@supabase/supabase-js";
 import { searchPlaceText } from "../lib/places/client";
-import { slugify } from "../lib/google/sync";
+import { slugify } from "../lib/google/slugify";
 import { REAL_OUTLETS } from "./places-outlets";
 
 const envFile = existsSync(".env.local") ? ".env.local" : ".env";

@@ -4,15 +4,9 @@ import { listGoogleReviews } from "./reviews";
 import { configureReviewNotifications } from "./notifications";
 import { ingestGoogleReview, processIngestedReview } from "@/lib/reviews/ingest-review";
 import { recomputeOutletStats } from "@/lib/outlets/recompute-stats";
+import { slugify } from "./slugify";
 
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/suka shawarma/i, "")
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || `outlet-${Date.now()}`;
-}
+export { slugify };
 
 export interface SyncProgress {
   step: "connecting" | "outlets" | "reviews" | "analyzing" | "completed";
