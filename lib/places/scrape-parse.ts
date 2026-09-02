@@ -27,6 +27,33 @@ export function parseAggregateRating(ariaLabel: string): { rating: number; revie
   return null;
 }
 
+/**
+ * "4,6(4.047)" (id) or "4.6(4,047)" (en) — the rating and review count as
+ * two separate text nodes combined, verified live on a place's own
+ * standalone page (as opposed to the search-results-list view, where
+ * parseAggregateRating's single combined aria-label applies instead). Both
+ * layouts are real and scrape-browser.ts tries both.
+ */
+export function parseAggregateRatingFromCombinedText(text: string): { rating: number; reviewCount: number } | null {
+  const trimmed = text.trim();
+
+  const idMatch = trimmed.match(/^([\d.]+),(\d+)\((\d[\d.]*)\)$/);
+  if (idMatch) {
+    const rating = parseFloat(`${idMatch[1].replace(/\./g, "")}.${idMatch[2]}`);
+    const reviewCount = parseInt(idMatch[3].replace(/\./g, ""), 10);
+    if (!Number.isNaN(rating) && !Number.isNaN(reviewCount)) return { rating, reviewCount };
+  }
+
+  const enMatch = trimmed.match(/^([\d,]+)\.(\d+)\((\d[\d,]*)\)$/);
+  if (enMatch) {
+    const rating = parseFloat(`${enMatch[1].replace(/,/g, "")}.${enMatch[2]}`);
+    const reviewCount = parseInt(enMatch[3].replace(/,/g, ""), 10);
+    if (!Number.isNaN(rating) && !Number.isNaN(reviewCount)) return { rating, reviewCount };
+  }
+
+  return null;
+}
+
 /** "5 bintang" / "1 star" / "4 stars" — always a whole number, 1-5. */
 export function parseReviewStars(ariaLabel: string): 1 | 2 | 3 | 4 | 5 | null {
   const trimmed = ariaLabel.trim().toLowerCase();

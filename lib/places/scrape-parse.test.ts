@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseAggregateRating, parseReviewStars, parseRelativeTimeToISO } from "./scrape-parse";
+import {
+  parseAggregateRating,
+  parseAggregateRatingFromCombinedText,
+  parseReviewStars,
+  parseRelativeTimeToISO,
+} from "./scrape-parse";
 
 describe("parseAggregateRating", () => {
   it("parses the verified Indonesian format (comma decimal, dot thousands)", () => {
@@ -20,6 +25,28 @@ describe("parseAggregateRating", () => {
 
   it("returns null for an empty string", () => {
     expect(parseAggregateRating("")).toBeNull();
+  });
+});
+
+describe("parseAggregateRatingFromCombinedText", () => {
+  it("parses the verified 'rating(count)' format on a place's own standalone page (id)", () => {
+    expect(parseAggregateRatingFromCombinedText("4,6(4.047)")).toEqual({ rating: 4.6, reviewCount: 4047 });
+  });
+
+  it("parses a count with no thousands separator", () => {
+    expect(parseAggregateRatingFromCombinedText("4,9(112)")).toEqual({ rating: 4.9, reviewCount: 112 });
+  });
+
+  it("parses the English fallback format (dot decimal, comma thousands)", () => {
+    expect(parseAggregateRatingFromCombinedText("4.6(4,047)")).toEqual({ rating: 4.6, reviewCount: 4047 });
+  });
+
+  it("returns null for an unrecognized format", () => {
+    expect(parseAggregateRatingFromCombinedText("Kedai Kopi")).toBeNull();
+  });
+
+  it("returns null for the rating alone with no parenthesized count", () => {
+    expect(parseAggregateRatingFromCombinedText("4,6")).toBeNull();
   });
 });
 

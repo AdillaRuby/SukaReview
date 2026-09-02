@@ -4,7 +4,12 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import type { Browser, Page } from "puppeteer-core";
 import type { PlaceDetails, PlaceSearchResult } from "@/types/places";
 import type { GoogleReview } from "@/types/google";
-import { parseAggregateRating, parseReviewStars, parseRelativeTimeToISO } from "./scrape-parse";
+import {
+  parseAggregateRating,
+  parseAggregateRatingFromCombinedText,
+  parseReviewStars,
+  parseRelativeTimeToISO,
+} from "./scrape-parse";
 
 // Deliberately does NOT `import "server-only"` — same reasoning as
 // lib/places/client.ts: nothing here needs to run outside Next, but
@@ -74,14 +79,34 @@ async function scrapePlacePageBasics(page: Page): Promise<PlacePageBasics | null
 
   const raw = await page.evaluate(() => {
     const addressBtn = document.querySelector('[aria-label^="Alamat:"], [aria-label^="Address:"]');
-    const ratingEl = document.querySelector(
+
+    // Two real layouts for the aggregate rating, both verified live:
+    // (1) search-results-list view — one badge combines rating+count in a
+    //     single aria-label, e.g. "4,6 bintang 4.046 Ulasan".
+    // (2) a place's own standalone page — the badge's aria-label has only
+    //     the rating ("4,6 bintang "), and the count sits as separate text
+    //     ("4,6(4.047)") in a nearby ancestor element.
+    const combinedRatingEl = document.querySelector(
       'span[role="img"][aria-label*="bintang" i][aria-label*="ulasan" i], span[role="img"][aria-label*="star" i][aria-label*="review" i]'
     );
+    const soloRatingEl = document.querySelector(
+      'span[role="img"][aria-label*="bintang" i], span[role="img"][aria-label*="star" i]'
+    );
+
+    const ratingAncestorTexts: string[] = [];
+    let ancestor = soloRatingEl?.parentElement ?? null;
+    for (let i = 0; i < 4 && ancestor; i++) {
+      const text = ancestor.textContent?.trim() ?? "";
+      if (text.length > 0 && text.length < 30) ratingAncestorTexts.push(text);
+      ancestor = ancestor.parentElement;
+    }
+
     return {
       title: document.title,
       address:
         addressBtn?.getAttribute("aria-label")?.replace(/^(Alamat|Address):\s*/i, "").trim() ?? null,
-      ratingAriaLabel: ratingEl?.getAttribute("aria-label") ?? null,
+      ratingAriaLabel: combinedRatingEl?.getAttribute("aria-label") ?? null,
+      ratingAncestorTexts,
     };
   });
 
@@ -92,7 +117,13 @@ async function scrapePlacePageBasics(page: Page): Promise<PlacePageBasics | null
   const name = raw.title.replace(/\s*-\s*Google Maps\s*$/i, "").trim();
   if (!name) return null;
 
-  const aggregate = raw.ratingAriaLabel ? parseAggregateRating(raw.ratingAriaLabel) : null;
+  let aggregate = raw.ratingAriaLabel ? parseAggregateRating(raw.ratingAriaLabel) : null;
+  if (!aggregate) {
+    for (const text of raw.ratingAncestorTexts) {
+      aggregate = parseAggregateRatingFromCombinedText(text);
+      if (aggregate) break;
+    }
+  }
 
   return {
     name,
@@ -115,10 +146,23 @@ export async function scrapeSearchPlaceText(query: string): Promise<PlaceSearchR
     }
 
     // A distinctive query often makes Google redirect straight to the
-    // place page. Otherwise, click the first result in the results list.
-    if (!page.url().includes("/maps/place/")) {
+    // place page — that URL is already clean, use it as-is. Otherwise,
+    // click the first result in the results list — but capture its href
+    // BEFORE clicking, not page.url() after: once Puppeteer clicks
+    // through, the URL picks up this search's query context
+    // (…!1s<query>!3m8…), and reloading THAT URL later makes Google
+    // re-render a results list instead of a clean single-place page
+    // (verified live), breaking a later scrapeGetPlaceDetails call
+    // against it.
+    let canonicalUrl = page.url();
+
+    if (!canonicalUrl.includes("/maps/place/")) {
       const firstResult = await page.$('a[href*="/maps/place/"]');
       if (!firstResult) return null;
+
+      const href = await page.evaluate((el) => el.getAttribute("href"), firstResult);
+      if (href) canonicalUrl = href.startsWith("http") ? href : `https://www.google.com${href}`;
+
       await Promise.all([
         page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }).catch(() => {}),
         firstResult.click(),
@@ -129,7 +173,7 @@ export async function scrapeSearchPlaceText(query: string): Promise<PlaceSearchR
     if (!basics) return null;
 
     return {
-      placeId: page.url(),
+      placeId: canonicalUrl,
       name: basics.name,
       address: basics.address,
       latitude: basics.latitude,
@@ -171,10 +215,19 @@ export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDeta
     }
 
     const reviewsTab = await page.$('[aria-label^="Ulasan untuk"], [aria-label^="Reviews for"]');
-    if (reviewsTab) {
-      await reviewsTab.click();
-      await page.waitForSelector("div[data-review-id]", { timeout: 15000 }).catch(() => {});
+    if (!reviewsTab) {
+      // A real place page always has a Reviews tab, even for a business
+      // with zero reviews — its total absence (verified live) means
+      // Google served a stripped-down page, a soft-block signal distinct
+      // from the /sorry/ redirect check above. Throw immediately rather
+      // than falling through to "0 reviews found" a few steps later.
+      throw new Error(
+        `Reviews tab not found while scraping ${placeUrl} — likely blocked/rate-limited (Google served a ` +
+          `stripped-down page with no reviews section) or the markup changed.`
+      );
     }
+    await reviewsTab.click();
+    await page.waitForSelector("div[data-review-id]", { timeout: 15000 }).catch(() => {});
 
     // Reviews lazy-load as the panel scrolls. A few scrolls is enough to
     // load well over 5 reviews (verified during design) without trying to
