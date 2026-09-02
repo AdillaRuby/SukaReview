@@ -3,12 +3,17 @@ import { getCurrentProfile, canManage } from "@/lib/auth/get-current-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPlacesSync, type PlacesSyncSummary } from "@/lib/places/sync";
 
-// Puppeteer page loads are much slower than a fetch call — scrape mode
-// needs more headroom than api mode. 300 requires at least a Vercel Pro
-// plan; if deploying scrape mode on Hobby, expect this route to time out
-// on larger outlet counts (the per-outlet try/catch in runPlacesSync means
-// a timeout mid-run still leaves already-processed outlets' data intact).
-export const maxDuration = process.env.GOOGLE_PLACES_MODE === "scrape" ? 300 : 60;
+// Puppeteer page loads are much slower than a fetch call, so scrape mode
+// needs more headroom than api mode needs. Route segment config exports
+// are extracted via static AST analysis at build time and can't read
+// process.env — an env-conditional ternary here is silently dropped by
+// Next's extractor (verified against this repo's own Next build
+// analyzer), which would leave maxDuration completely unset rather than
+// falling back to anything. So this has to stay a static literal: kept at
+// the Hobby-plan-safe default api mode needs. If deploying with
+// GOOGLE_PLACES_MODE=scrape, change this literal to 300 before building
+// (requires at least a Vercel Pro plan).
+export const maxDuration = 60;
 
 async function performSync(): Promise<PlacesSyncSummary> {
   const supabase = createAdminClient();

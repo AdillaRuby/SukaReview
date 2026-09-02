@@ -37,6 +37,11 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 async function withBrowser<T>(fn: (page: Page) => Promise<T>): Promise<T> {
+  // Basic anti-detection posture (the agreed effort level — see the design
+  // spec): stealth plugin (above) + a randomized delay before each request
+  // so consecutive scrapes from one IP don't look scripted.
+  await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 3000));
+
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
@@ -105,6 +110,10 @@ export async function scrapeSearchPlaceText(query: string): Promise<PlaceSearchR
     const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 30000 });
 
+    if (/\/sorry\/|consent\.google\.com/.test(page.url())) {
+      throw new Error(`Blocked or CAPTCHA'd while searching for "${query}" (redirected to ${page.url()})`);
+    }
+
     // A distinctive query often makes Google redirect straight to the
     // place page. Otherwise, click the first result in the results list.
     if (!page.url().includes("/maps/place/")) {
@@ -141,6 +150,14 @@ interface RawScrapedReview {
 
 /** Place details + reviews — placeUrl is a URL previously returned as `placeId`. */
 export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDetails> {
+  if (!placeUrl.startsWith("https://www.google.com/maps/")) {
+    throw new Error(
+      `scrapeGetPlaceDetails expects a Google Maps URL (from a prior scrapeSearchPlaceText call), got: ` +
+        `"${placeUrl}". This usually means the outlet's google_place_id was set while in "api" mode (an ` +
+        `opaque Places API ID, not a URL) — re-run scripts/resolve-places.ts with GOOGLE_PLACES_MODE=scrape ` +
+        `to replace it with a scraped URL.`
+    );
+  }
   return withBrowser(async (page) => {
     await page.goto(placeUrl, { waitUntil: "networkidle2", timeout: 30000 });
 
@@ -195,8 +212,12 @@ export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDeta
       const stars = parseReviewStars(raw.starAriaLabel);
       if (!stars) continue;
 
-      const parsedTime = raw.relativeTime ? parseRelativeTimeToISO(raw.relativeTime) : null;
-      const timestamp = parsedTime ?? new Date().toISOString();
+      const timestamp = raw.relativeTime ? parseRelativeTimeToISO(raw.relativeTime) : null;
+      if (!timestamp) continue; // Unparseable time (format outside id/en, or missing) — skip rather
+      // than inventing "now", which would misdate an old review as posted
+      // today and permanently pollute the alert engine's 24h negative-
+      // review window (google_created_at gets re-stamped to "now" again on
+      // every re-sync via ingestGoogleReview's update path).
 
       reviews.push({
         reviewId: raw.reviewId,

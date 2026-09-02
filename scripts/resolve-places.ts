@@ -27,8 +27,18 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
-if (!process.env.GOOGLE_PLACES_API_KEY) {
+const scrapeMode = process.env.GOOGLE_PLACES_MODE === "scrape";
+
+if (!scrapeMode && !process.env.GOOGLE_PLACES_API_KEY) {
   console.error("Missing GOOGLE_PLACES_API_KEY in your environment.");
+  process.exit(1);
+}
+
+if (scrapeMode && !process.env.PUPPETEER_EXECUTABLE_PATH) {
+  console.error(
+    "GOOGLE_PLACES_MODE=scrape but PUPPETEER_EXECUTABLE_PATH is not set — this script runs locally, " +
+      "point it at your installed Chrome (see .env.example)."
+  );
   process.exit(1);
 }
 
