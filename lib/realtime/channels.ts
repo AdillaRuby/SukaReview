@@ -6,10 +6,9 @@ interface BroadcastChangePayload<T> {
   payload: {
     schema: string;
     table: string;
-    commit_timestamp: string;
-    eventType: "INSERT" | "UPDATE" | "DELETE";
-    new: T;
-    old: Partial<T>;
+    operation: "INSERT" | "UPDATE" | "DELETE";
+    record: T;
+    old_record: Partial<T>;
   };
 }
 
@@ -38,27 +37,27 @@ export function subscribeToRealtimeChannels(
   const reviewsChannel = supabase
     .channel("reviews:feed", { config: { private: true } })
     .on("broadcast", { event: "INSERT" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["reviews"]["Row"]>) => {
-      realtimeBus.emit("review-insert", msg.payload.new);
+      realtimeBus.emit("review-insert", msg.payload.record);
     })
     .on("broadcast", { event: "UPDATE" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["reviews"]["Row"]>) => {
-      realtimeBus.emit("review-update", msg.payload.new);
+      realtimeBus.emit("review-update", msg.payload.record);
     })
     .subscribe((status) => handleStatus("reviews", status));
 
   const alertsChannel = supabase
     .channel("alerts:feed", { config: { private: true } })
     .on("broadcast", { event: "INSERT" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["alerts"]["Row"]>) => {
-      realtimeBus.emit("alert-insert", msg.payload.new);
+      realtimeBus.emit("alert-insert", msg.payload.record);
     })
     .on("broadcast", { event: "UPDATE" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["alerts"]["Row"]>) => {
-      realtimeBus.emit("alert-update", msg.payload.new);
+      realtimeBus.emit("alert-update", msg.payload.record);
     })
     .subscribe((status) => handleStatus("alerts", status));
 
   const outletsChannel = supabase
     .channel("outlets:feed", { config: { private: true } })
     .on("broadcast", { event: "UPDATE" }, (msg: BroadcastChangePayload<Database["public"]["Tables"]["outlets"]["Row"]>) => {
-      realtimeBus.emit("outlet-update", msg.payload.new);
+      realtimeBus.emit("outlet-update", msg.payload.record);
     })
     .subscribe((status) => handleStatus("outlets", status));
 
