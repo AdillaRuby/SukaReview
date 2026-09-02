@@ -207,17 +207,23 @@ export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDeta
     });
 
     const reviews: GoogleReview[] = [];
+    let skippedUnparseableTime = 0;
     for (const raw of rawReviews) {
       if (!raw.reviewId || !raw.starAriaLabel) continue;
       const stars = parseReviewStars(raw.starAriaLabel);
       if (!stars) continue;
 
+      // Skip rather than inventing "now" for an unparseable time (format
+      // outside id/en, or .rsqaWe markup drift) — a fake "now" timestamp
+      // would misdate an old review as posted today and permanently
+      // pollute the alert engine's 24h negative-review window
+      // (google_created_at gets re-stamped to "now" again on every
+      // re-sync via ingestGoogleReview's update path).
       const timestamp = raw.relativeTime ? parseRelativeTimeToISO(raw.relativeTime) : null;
-      if (!timestamp) continue; // Unparseable time (format outside id/en, or missing) — skip rather
-      // than inventing "now", which would misdate an old review as posted
-      // today and permanently pollute the alert engine's 24h negative-
-      // review window (google_created_at gets re-stamped to "now" again on
-      // every re-sync via ingestGoogleReview's update path).
+      if (!timestamp) {
+        skippedUnparseableTime += 1;
+        continue;
+      }
 
       reviews.push({
         reviewId: raw.reviewId,
@@ -233,6 +239,13 @@ export async function scrapeGetPlaceDetails(placeUrl: string): Promise<PlaceDeta
     if (basics.rating === null && reviews.length === 0) {
       throw new Error(
         `Blocked, CAPTCHA'd, or markup changed while scraping ${placeUrl} (no rating and no reviews found)`
+      );
+    }
+
+    if (reviews.length === 0 && skippedUnparseableTime > 0) {
+      throw new Error(
+        `Found ${skippedUnparseableTime} review(s) at ${placeUrl} but none had a parseable relative ` +
+          `time (locale outside id/en, or .rsqaWe markup drift)`
       );
     }
 
