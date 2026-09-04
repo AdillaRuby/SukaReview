@@ -62,7 +62,11 @@ export default async function SettingsPage() {
       <GoogleConnectionCard isDemoMode={isDemoMode} connection={connection} canManageConnection={canManageSettings} />
 
       <PlacesSyncCard
-        configured={process.env.GOOGLE_PLACES_MODE === "scrape" || !!process.env.GOOGLE_PLACES_API_KEY}
+        configured={
+          process.env.GOOGLE_PLACES_MODE === "scrape" ||
+          process.env.GOOGLE_PLACES_MODE === "serpapi" ||
+          !!process.env.GOOGLE_PLACES_API_KEY
+        }
         state={
           placesSyncRow
             ? {

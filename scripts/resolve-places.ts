@@ -28,9 +28,15 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
 }
 
 const scrapeMode = process.env.GOOGLE_PLACES_MODE === "scrape";
+const serpapiMode = process.env.GOOGLE_PLACES_MODE === "serpapi";
 
-if (!scrapeMode && !process.env.GOOGLE_PLACES_API_KEY) {
+if (!scrapeMode && !serpapiMode && !process.env.GOOGLE_PLACES_API_KEY) {
   console.error("Missing GOOGLE_PLACES_API_KEY in your environment.");
+  process.exit(1);
+}
+
+if (serpapiMode && !process.env.SERPAPI_API_KEY) {
+  console.error("GOOGLE_PLACES_MODE=serpapi but SERPAPI_API_KEY is not set.");
   process.exit(1);
 }
 

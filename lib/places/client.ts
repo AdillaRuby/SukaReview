@@ -115,24 +115,39 @@ async function apiSearchPlaceText(query: string): Promise<PlaceSearchResult | nu
   };
 }
 
-function isScrapeMode(): boolean {
-  return process.env.GOOGLE_PLACES_MODE === "scrape";
+type PlacesMode = "api" | "scrape" | "serpapi";
+
+function getPlacesMode(): PlacesMode {
+  const mode = process.env.GOOGLE_PLACES_MODE;
+  if (mode === "scrape") return "scrape";
+  if (mode === "serpapi") return "serpapi";
+  return "api";
 }
 
 /** Fetches a place's aggregate rating/review count plus up to 5 reviews. */
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
-  if (isScrapeMode()) {
+  const mode = getPlacesMode();
+  if (mode === "scrape") {
     const { scrapeGetPlaceDetails } = await import("./scrape-browser");
     return scrapeGetPlaceDetails(placeId);
+  }
+  if (mode === "serpapi") {
+    const { serpapiGetPlaceDetails } = await import("./serpapi-client");
+    return serpapiGetPlaceDetails(placeId);
   }
   return apiGetPlaceDetails(placeId);
 }
 
 /** Text Search — used only by scripts/resolve-places.ts to bootstrap outlets. */
 export async function searchPlaceText(query: string): Promise<PlaceSearchResult | null> {
-  if (isScrapeMode()) {
+  const mode = getPlacesMode();
+  if (mode === "scrape") {
     const { scrapeSearchPlaceText } = await import("./scrape-browser");
     return scrapeSearchPlaceText(query);
+  }
+  if (mode === "serpapi") {
+    const { serpapiSearchPlaceText } = await import("./serpapi-client");
+    return serpapiSearchPlaceText(query);
   }
   return apiSearchPlaceText(query);
 }
