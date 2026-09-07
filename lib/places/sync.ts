@@ -1,9 +1,19 @@
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestGoogleReview, processIngestedReview } from "@/lib/reviews/ingest-review";
 import type { IngestResult } from "@/lib/reviews/ingest-review";
 import { getPlaceDetails } from "./client";
 import { deriveOutletStatus, getNegative24hCount } from "@/lib/outlets/recompute-stats";
 import type { GoogleReview } from "@/types/google";
+
+// Vercel Hobby caps function duration at 60s. 20 outlets processed one at a
+// time (each a network round trip to the Places provider) plus a synchronous
+// Gemini call per new review can easily exceed that. Batching outlets keeps
+// wall-clock time down; deferring the AI/alert step to `after()` (only valid
+// inside a Next.js request lifecycle — this function must only be called
+// from route handlers, never a plain script) keeps it off the response path
+// entirely.
+const OUTLET_CONCURRENCY = 10;
 
 export interface PlacesSyncOutletError {
   outletId: string;
@@ -45,7 +55,7 @@ export async function runPlacesSync(): Promise<PlacesSyncSummary> {
   let newReviewsFound = 0;
   const errors: PlacesSyncOutletError[] = [];
 
-  for (const outlet of withPlaceId) {
+  async function processOutlet(outlet: (typeof withPlaceId)[number]): Promise<void> {
     try {
       const details = await getPlaceDetails(outlet.google_place_id);
 
@@ -76,9 +86,13 @@ export async function runPlacesSync(): Promise<PlacesSyncSummary> {
         }
       }
 
+      // Deferred to run after the response is sent — Gemini analysis is the
+      // slowest part of a sync and none of it needs to finish before the
+      // caller (cron or "Sync Now") gets its outletsProcessed/newReviewsFound
+      // summary back.
       for (const { result, review } of newlyIngested) {
         newReviewsFound += 1;
-        await processIngestedReview(result, outlet.name, review.starRating);
+        after(() => processIngestedReview(result, outlet.name, review.starRating));
       }
 
       outletsProcessed += 1;
@@ -89,6 +103,11 @@ export async function runPlacesSync(): Promise<PlacesSyncSummary> {
         message: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  for (let i = 0; i < withPlaceId.length; i += OUTLET_CONCURRENCY) {
+    const batch = withPlaceId.slice(i, i + OUTLET_CONCURRENCY);
+    await Promise.all(batch.map(processOutlet));
   }
 
   return { outletsProcessed, outletsSkippedNoPlaceId, newReviewsFound, errors };
