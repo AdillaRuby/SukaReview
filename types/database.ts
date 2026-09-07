@@ -191,6 +191,8 @@ export interface Database {
           negative_spike_count: number;
           negative_spike_window_hours: number;
           rating_drop_threshold: number;
+          notify_email_enabled: boolean;
+          notify_email: string | null;
           updated_at: string;
           updated_by: string | null;
         };

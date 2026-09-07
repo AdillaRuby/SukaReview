@@ -6,6 +6,7 @@ import { Loader2, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
@@ -15,6 +16,8 @@ interface AlertSettingsData {
   negative_spike_count: number;
   negative_spike_window_hours: number;
   rating_drop_threshold: number;
+  notify_email_enabled: boolean;
+  notify_email: string | null;
 }
 
 export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) {
@@ -82,6 +85,30 @@ export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) 
           step={0.1}
           onChange={(v) => setValues((s) => ({ ...s, rating_drop_threshold: v }))}
         />
+
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Kirim ke Email</p>
+              <p className="text-xs text-muted-foreground">
+                Kirim email saat review baru masuk dengan rating ≤ {values.urgent_review_rating_threshold}⭐ (pakai
+                threshold "Urgent review" di atas).
+              </p>
+            </div>
+            <Switch
+              checked={values.notify_email_enabled}
+              onCheckedChange={(v) => setValues((s) => ({ ...s, notify_email_enabled: v }))}
+            />
+          </div>
+          {values.notify_email_enabled && (
+            <Input
+              type="email"
+              placeholder="owner@email.com"
+              value={values.notify_email ?? ""}
+              onChange={(e) => setValues((s) => ({ ...s, notify_email: e.target.value }))}
+            />
+          )}
+        </div>
 
         <Button onClick={handleSave} disabled={saving} className="self-start">
           {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Simpan

@@ -98,6 +98,8 @@ export default async function SettingsPage() {
             negative_spike_count: alertSettings.negative_spike_count,
             negative_spike_window_hours: alertSettings.negative_spike_window_hours,
             rating_drop_threshold: alertSettings.rating_drop_threshold,
+            notify_email_enabled: alertSettings.notify_email_enabled,
+            notify_email: alertSettings.notify_email,
           }}
         />
       )}

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendLowRatingReviewEmail } from "./notify-email";
 import type { AlertSeverity, AlertType } from "@/types/database";
 
 interface EvaluateInput {
@@ -28,6 +29,8 @@ export async function evaluateOutletAlerts({
     negative_spike_count: 3,
     negative_spike_window_hours: 24,
     rating_drop_threshold: 0.3,
+    notify_email_enabled: false,
+    notify_email: null,
   };
 
   const hasActiveAlert = async (type: AlertType, reviewId?: string) => {
@@ -76,6 +79,24 @@ export async function evaluateOutletAlerts({
       message: `Review baru dengan rating ${triggerRating}⭐ masuk.`,
       reviewId: triggerReviewId,
     });
+
+    if (thresholds.notify_email_enabled && thresholds.notify_email) {
+      const { data: triggerReview } = await supabase
+        .from("reviews")
+        .select("reviewer_name, comment")
+        .eq("id", triggerReviewId)
+        .single();
+
+      if (triggerReview) {
+        await sendLowRatingReviewEmail({
+          to: thresholds.notify_email,
+          outletName,
+          rating: triggerRating,
+          reviewerName: triggerReview.reviewer_name,
+          comment: triggerReview.comment,
+        });
+      }
+    }
   }
 
   // Rule 2: negative-review spike in the configured time window.
