@@ -1,8 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { RotateCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { Sentiment, AnalysisStatus } from "@/types/database";
 
@@ -21,40 +18,20 @@ const VARIANTS: Record<Sentiment, "positive" | "neutral" | "negative"> = {
 export function SentimentBadge({
   sentiment,
   analysisStatus,
-  reviewId,
 }: {
   sentiment: Sentiment | null;
   analysisStatus?: AnalysisStatus;
-  reviewId?: string;
 }) {
-  const [retrying, setRetrying] = useState(false);
-  const router = useRouter();
-
   if (!sentiment) {
+    // AI analysis is an optional add-on (needs GEMINI_API_KEY) — when it's
+    // not configured, every review lands here permanently, so this stays a
+    // quiet, neutral badge rather than something that reads as a system
+    // error with a retry action that can never succeed.
     if (analysisStatus === "failed") {
       return (
-        <span className="inline-flex items-center gap-1.5">
-          <Badge variant="outline" className="text-negative">
-            Analisis gagal
-          </Badge>
-          {reviewId && (
-            <button
-              onClick={async () => {
-                setRetrying(true);
-                try {
-                  await fetch(`/api/reviews/${reviewId}/retry-analysis`, { method: "POST" });
-                  router.refresh();
-                } finally {
-                  setRetrying(false);
-                }
-              }}
-              disabled={retrying}
-              className="inline-flex items-center gap-1 text-xs text-accent hover:underline disabled:opacity-50"
-            >
-              <RotateCw className={retrying ? "size-3 animate-spin" : "size-3"} /> Retry
-            </button>
-          )}
-        </span>
+        <Badge variant="outline" className="text-muted-foreground">
+          Analisis AI tidak aktif
+        </Badge>
       );
     }
     return (

@@ -69,7 +69,7 @@ export function ReviewCard({
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <SentimentBadge sentiment={review.sentiment} analysisStatus={review.analysisStatus} reviewId={review.id} />
+            <SentimentBadge sentiment={review.sentiment} analysisStatus={review.analysisStatus} />
             {review.categories.map((c) => (
               <CategoryBadge key={c} category={c} />
             ))}
