@@ -54,3 +54,36 @@ export async function sendLowRatingReviewEmail(input: LowRatingEmailInput): Prom
     console.error("[alerts] failed to send low-rating review email:", err instanceof Error ? err.message : err);
   }
 }
+
+/**
+ * Sends a sample alert email for the "Kirim Test Email" button in Settings.
+ * Unlike sendLowRatingReviewEmail, this surfaces failures to the caller
+ * instead of swallowing them, since it exists specifically to diagnose
+ * whether RESEND_API_KEY / the sender domain are configured correctly.
+ */
+export async function sendTestAlertEmail(to: string): Promise<{ ok: boolean; error?: string }> {
+  const resend = getClient();
+  if (!resend) return { ok: false, error: "RESEND_API_KEY belum diatur di server." };
+
+  const from = process.env.RESEND_FROM_EMAIL || "SukaReview Alerts <onboarding@resend.dev>";
+
+  try {
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject: "[Test] Contoh notifikasi review rating rendah",
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px;">
+          <h2 style="margin-bottom: 4px;">Suka Shawarma Cicurug (contoh)</h2>
+          <p style="color: #b45309; font-weight: 600; margin: 0 0 12px;">⭐ (1/5) — Test User</p>
+          <p style="white-space: pre-wrap; color: #374151;">Ini email percobaan dari SukaReview untuk memastikan notifikasi email berfungsi.</p>
+        </div>
+      `,
+    });
+
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Gagal mengirim email." };
+  }
+}

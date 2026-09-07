@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Send } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) 
   const router = useRouter();
   const [values, setValues] = useState(initial);
   const [saving, setSaving] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   async function handleSave() {
     setSaving(true);
@@ -43,6 +44,28 @@ export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) 
     } else {
       toast.success("Pengaturan disimpan.");
       router.refresh();
+    }
+  }
+
+  async function handleTestEmail() {
+    if (!values.notify_email) {
+      toast.error("Isi alamat email dulu.");
+      return;
+    }
+
+    setTestingEmail(true);
+    const res = await fetch("/api/alerts/test-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: values.notify_email }),
+    });
+    setTestingEmail(false);
+
+    if (res.ok) {
+      toast.success(`Test email terkirim ke ${values.notify_email}.`);
+    } else {
+      const { error } = await res.json().catch(() => ({ error: "Gagal mengirim test email." }));
+      toast.error(error ?? "Gagal mengirim test email.");
     }
   }
 
@@ -92,7 +115,7 @@ export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) 
               <p className="text-sm font-medium text-foreground">Kirim ke Email</p>
               <p className="text-xs text-muted-foreground">
                 Kirim email saat review baru masuk dengan rating ≤ {values.urgent_review_rating_threshold}⭐ (pakai
-                threshold "Urgent review" di atas).
+                threshold &quot;Urgent review&quot; di atas).
               </p>
             </div>
             <Switch
@@ -101,12 +124,25 @@ export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) 
             />
           </div>
           {values.notify_email_enabled && (
-            <Input
-              type="email"
-              placeholder="owner@email.com"
-              value={values.notify_email ?? ""}
-              onChange={(e) => setValues((s) => ({ ...s, notify_email: e.target.value }))}
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                type="email"
+                placeholder="owner@email.com"
+                value={values.notify_email ?? ""}
+                onChange={(e) => setValues((s) => ({ ...s, notify_email: e.target.value }))}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="shrink-0"
+                onClick={handleTestEmail}
+                disabled={testingEmail}
+              >
+                {testingEmail ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Kirim Test
+                Email
+              </Button>
+            </div>
           )}
         </div>
 
