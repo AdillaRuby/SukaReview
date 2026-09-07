@@ -5,6 +5,8 @@ import type { ReviewCategoryTag } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
+const RATING_TREND_ROLLING_WINDOW_DAYS = 7;
+
 export async function getOverallRatingTrend(supabase: Client, days: number): Promise<RatingTrendPoint[]> {
   const since = new Date();
   since.setDate(since.getDate() - days);
@@ -24,9 +26,33 @@ export async function getOverallRatingTrend(supabase: Client, days: number): Pro
     byDay.set(day, entry);
   }
 
-  return Array.from(byDay.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, { sum, count }]) => ({ date, rating: Math.round((sum / count) * 10) / 10, reviewCount: count }));
+  const sortedDays = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+  // A single day's raw average is noisy on low-volume days — one 1-star
+  // review with no other reviews that day makes the "overall" line look
+  // like it crashed. Smooth `rating` with a trailing 7-calendar-day
+  // weighted average instead; `reviewCount` stays that day's true count
+  // (the volume chart reads the same points and needs the real number).
+  return sortedDays.map(([date], index) => {
+    const windowStart = new Date(date);
+    windowStart.setDate(windowStart.getDate() - (RATING_TREND_ROLLING_WINDOW_DAYS - 1));
+    const windowStartStr = windowStart.toISOString().slice(0, 10);
+
+    let windowSum = 0;
+    let windowCount = 0;
+    for (let i = index; i >= 0; i--) {
+      const [d, entry] = sortedDays[i];
+      if (d < windowStartStr) break;
+      windowSum += entry.sum;
+      windowCount += entry.count;
+    }
+
+    return {
+      date,
+      rating: Math.round((windowSum / windowCount) * 10) / 10,
+      reviewCount: byDay.get(date)!.count,
+    };
+  });
 }
 
 export async function getRatingDistribution(supabase: Client, days: number) {
