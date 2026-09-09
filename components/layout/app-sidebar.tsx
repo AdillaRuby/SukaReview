@@ -1,18 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/common/logo";
 import { NAV_ITEMS } from "./nav-items";
 
 const COLLAPSE_KEY = "sukareview:sidebar-collapsed";
 
+/** A child link is active when its pathname AND its `rating` param (if any) both match the current URL. */
+function isChildActive(childHref: string, pathname: string, searchParams: URLSearchParams): boolean {
+  const [childPath, childQuery] = childHref.split("?");
+  if (pathname !== childPath) return false;
+  return new URLSearchParams(childQuery ?? "").get("rating") === searchParams.get("rating");
+}
+
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(href: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(href)) next.delete(href);
+      else next.add(href);
+      return next;
+    });
+  }
 
   useEffect(() => {
     // Reads localStorage after mount (client/server render must match on
@@ -51,24 +69,55 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 space-y-0.5 p-2">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const isExpanded = expanded.has(item.href);
           const Icon = item.icon;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-primary/15 text-primary-hover"
-                  : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-                collapsed && "justify-center px-0"
+            <div key={item.href}>
+              <Link
+                href={item.href}
+                onClick={() => {
+                  onNavigate?.();
+                  if (item.children) toggleExpanded(item.href);
+                }}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-primary/15 text-primary-hover"
+                    : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                  collapsed && "justify-center px-0"
+                )}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon className="size-4.5 shrink-0" />
+                {!collapsed && item.label}
+                {!collapsed && item.children && (
+                  <ChevronDown className={cn("ml-auto size-3.5 transition-transform", isExpanded && "rotate-180")} />
+                )}
+              </Link>
+
+              {!collapsed && item.children && isExpanded && (
+                <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-border pl-3">
+                  {item.children.map((child) => {
+                    const childActive = isChildActive(child.href, pathname, searchParams);
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        onClick={onNavigate}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-sm transition-colors",
+                          childActive
+                            ? "bg-primary/15 font-medium text-primary-hover"
+                            : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                        )}
+                      >
+                        {child.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               )}
-              title={collapsed ? item.label : undefined}
-            >
-              <Icon className="size-4.5 shrink-0" />
-              {!collapsed && item.label}
-            </Link>
+            </div>
           );
         })}
       </nav>
