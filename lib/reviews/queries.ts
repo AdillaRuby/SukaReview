@@ -63,11 +63,19 @@ export function mapReviewRow(row: RawReviewJoinRow): ReviewWithRelations {
   };
 }
 
+/**
+ * Ordered by `created_at` (when the review landed in OUR database), not
+ * `google_created_at` (when it was originally posted on Google Maps) — this
+ * feed is meant to show what just showed up for us, e.g. a review that's
+ * months old on Maps but only just got pulled in by today's sync should
+ * still appear here, matching the same "isNew" signal the alert/email
+ * pipeline uses (lib/alerts/engine.ts).
+ */
 export async function getLiveReviewFeed(supabase: Client, limit = 25): Promise<ReviewWithRelations[]> {
   const { data, error } = await supabase
     .from("reviews")
     .select(REVIEW_SELECT)
-    .order("google_created_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
