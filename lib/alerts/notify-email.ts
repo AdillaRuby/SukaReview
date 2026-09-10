@@ -10,7 +10,7 @@ function getClient(): Resend | null {
 }
 
 interface LowRatingEmailInput {
-  to: string;
+  to: string[];
   outletName: string;
   rating: number;
   reviewerName: string;
@@ -20,6 +20,16 @@ interface LowRatingEmailInput {
 function escapeHtml(text: string): string {
   const map: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   return text.replace(/[&<>"']/g, (c) => map[c]);
+}
+
+/**
+ * Splits the single `alert_settings.notify_email` text field into multiple
+ * recipients (comma or semicolon separated) — chosen over a text[] column
+ * or a separate recipients table so adding this needs no new migration.
+ */
+export function parseEmailList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return [...new Set(raw.split(/[,;]/).map((e) => e.trim()).filter(Boolean))];
 }
 
 /**
@@ -61,9 +71,12 @@ export async function sendLowRatingReviewEmail(input: LowRatingEmailInput): Prom
  * instead of swallowing them, since it exists specifically to diagnose
  * whether RESEND_API_KEY / the sender domain are configured correctly.
  */
-export async function sendTestAlertEmail(to: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendTestAlertEmail(rawTo: string): Promise<{ ok: boolean; error?: string }> {
   const resend = getClient();
   if (!resend) return { ok: false, error: "RESEND_API_KEY belum diatur di server." };
+
+  const to = parseEmailList(rawTo);
+  if (to.length === 0) return { ok: false, error: "Alamat email tidak valid." };
 
   const from = process.env.RESEND_FROM_EMAIL || "SukaReview Alerts <onboarding@resend.dev>";
 

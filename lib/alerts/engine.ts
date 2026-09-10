@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendLowRatingReviewEmail } from "./notify-email";
+import { sendLowRatingReviewEmail, parseEmailList } from "./notify-email";
 import type { AlertSeverity, AlertType } from "@/types/database";
 
 interface EvaluateInput {
@@ -80,7 +80,8 @@ export async function evaluateOutletAlerts({
       reviewId: triggerReviewId,
     });
 
-    if (thresholds.notify_email_enabled && thresholds.notify_email) {
+    const recipients = thresholds.notify_email_enabled ? parseEmailList(thresholds.notify_email) : [];
+    if (recipients.length > 0) {
       const { data: triggerReview } = await supabase
         .from("reviews")
         .select("reviewer_name, comment")
@@ -89,7 +90,7 @@ export async function evaluateOutletAlerts({
 
       if (triggerReview) {
         await sendLowRatingReviewEmail({
-          to: thresholds.notify_email,
+          to: recipients,
           outletName,
           rating: triggerRating,
           reviewerName: triggerReview.reviewer_name,

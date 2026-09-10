@@ -115,7 +115,7 @@ export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) 
               <p className="text-sm font-medium text-foreground">Kirim ke Email</p>
               <p className="text-xs text-muted-foreground">
                 Kirim email saat review baru masuk dengan rating ≤ {values.urgent_review_rating_threshold}⭐ (pakai
-                threshold &quot;Urgent review&quot; di atas).
+                threshold &quot;Urgent review&quot; di atas). Bisa isi lebih dari 1 alamat, pisahkan dengan koma.
               </p>
             </div>
             <Switch
@@ -127,7 +127,8 @@ export function SystemSettingsCard({ initial }: { initial: AlertSettingsData }) 
             <div className="flex items-center gap-2">
               <Input
                 type="email"
-                placeholder="owner@email.com"
+                multiple
+                placeholder="owner@email.com, manager@email.com"
                 value={values.notify_email ?? ""}
                 onChange={(e) => setValues((s) => ({ ...s, notify_email: e.target.value }))}
               />
