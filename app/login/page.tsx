@@ -4,10 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 import { LoginForm } from "@/components/auth/login-form";
 import { Logo } from "@/components/common/logo";
 
-// Set to false to re-enable the login/sign-up page.
+// Set to false to re-enable the login/sign-up page for everyone.
 const LOGIN_DISABLED = true;
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const bypassCode = process.env.LOGIN_BYPASS_CODE;
+  const bypassed = Boolean(bypassCode) && params.bypass === bypassCode;
+  const showForm = !LOGIN_DISABLED || bypassed;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -29,14 +38,14 @@ export default async function LoginPage() {
           <p className="font-display text-xl font-bold tracking-tight text-foreground">SukaReview</p>
           <p className="mt-1 text-xs text-muted-foreground">Suka Shawarma Review Monitor</p>
         </div>
-        {LOGIN_DISABLED ? (
-          <p className="text-center text-sm text-muted-foreground">
-            Login sedang dinonaktifkan sementara. Hubungi admin untuk informasi lebih lanjut.
-          </p>
-        ) : (
+        {showForm ? (
           <Suspense>
             <LoginForm />
           </Suspense>
+        ) : (
+          <p className="text-center text-sm text-muted-foreground">
+            Login sedang dinonaktifkan sementara. Hubungi admin untuk informasi lebih lanjut.
+          </p>
         )}
       </div>
     </div>
