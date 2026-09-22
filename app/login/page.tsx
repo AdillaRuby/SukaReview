@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { LoginForm } from "@/components/auth/login-form";
 import { Logo } from "@/components/common/logo";
 
+// Set to false to re-enable the login/sign-up page.
+const LOGIN_DISABLED = true;
+
 export default async function LoginPage() {
   const supabase = await createClient();
   const {
@@ -26,9 +29,15 @@ export default async function LoginPage() {
           <p className="font-display text-xl font-bold tracking-tight text-foreground">SukaReview</p>
           <p className="mt-1 text-xs text-muted-foreground">Suka Shawarma Review Monitor</p>
         </div>
-        <Suspense>
-          <LoginForm />
-        </Suspense>
+        {LOGIN_DISABLED ? (
+          <p className="text-center text-sm text-muted-foreground">
+            Login sedang dinonaktifkan sementara. Hubungi admin untuk informasi lebih lanjut.
+          </p>
+        ) : (
+          <Suspense>
+            <LoginForm />
+          </Suspense>
+        )}
       </div>
     </div>
   );
