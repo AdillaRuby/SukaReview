@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { LoginForm } from "@/components/auth/login-form";
 import { Logo } from "@/components/common/logo";
 
@@ -15,14 +16,34 @@ export default async function LoginPage({
   const params = await searchParams;
   const bypassCode = process.env.LOGIN_BYPASS_CODE;
   const bypassed = Boolean(bypassCode) && params.bypass === bypassCode;
-  const showForm = !LOGIN_DISABLED || bypassed;
 
   const supabase = await createClient();
+
+  // Silently sign the bypass account in — no form, no password on the wire.
+  if (bypassed && process.env.LOGIN_BYPASS_EMAIL) {
+    const admin = createAdminClient();
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: process.env.LOGIN_BYPASS_EMAIL,
+    });
+    const hashedToken = linkData?.properties?.hashed_token;
+
+    if (!linkError && hashedToken) {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        type: "magiclink",
+        token_hash: hashedToken,
+      });
+      if (!verifyError) redirect("/dashboard");
+    }
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (user) redirect("/dashboard");
+
+  const showForm = !LOGIN_DISABLED || bypassed;
 
   return (
     <div
