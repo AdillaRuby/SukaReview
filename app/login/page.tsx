@@ -28,13 +28,23 @@ export default async function LoginPage({
     });
     const hashedToken = linkData?.properties?.hashed_token;
 
-    if (!linkError && hashedToken) {
+    if (linkError) {
+      console.error("[login-bypass] generateLink failed:", linkError.message);
+    } else if (!hashedToken) {
+      console.error("[login-bypass] generateLink returned no hashed_token");
+    } else {
       const { error: verifyError } = await supabase.auth.verifyOtp({
         type: "magiclink",
         token_hash: hashedToken,
       });
-      if (!verifyError) redirect("/dashboard");
+      if (verifyError) {
+        console.error("[login-bypass] verifyOtp failed:", verifyError.message);
+      } else {
+        redirect("/dashboard");
+      }
     }
+  } else if (bypassed && !process.env.LOGIN_BYPASS_EMAIL) {
+    console.error("[login-bypass] LOGIN_BYPASS_EMAIL is not set");
   }
 
   const {
