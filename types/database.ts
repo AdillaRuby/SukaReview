@@ -193,6 +193,8 @@ export interface Database {
           rating_drop_threshold: number;
           notify_email_enabled: boolean;
           notify_email: string | null;
+          notify_telegram_enabled?: boolean;
+          notify_telegram_chat_ids?: string | null;
           updated_at: string;
           updated_by: string | null;
         };

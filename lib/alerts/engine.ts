@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendLowRatingReviewEmail, parseEmailList } from "./notify-email";
+import { sendTelegramAlert } from "./notify-telegram";
 import type { AlertSeverity, AlertType } from "@/types/database";
 
 interface EvaluateInput {
@@ -72,23 +73,41 @@ export async function evaluateOutletAlerts({
     triggerRating <= thresholds.urgent_review_rating_threshold &&
     !(await hasActiveAlert("LOW_RATING_REVIEW", triggerReviewId))
   ) {
+    const severity: AlertSeverity = triggerRating === 1 ? "high" : "medium";
+    const title = outletName;
+    const message = `Review baru dengan rating ${triggerRating}⭐ masuk.`;
+
     await createAlert({
       type: "LOW_RATING_REVIEW",
-      severity: triggerRating === 1 ? "high" : "medium",
-      title: outletName,
-      message: `Review baru dengan rating ${triggerRating}⭐ masuk.`,
+      severity,
+      title,
+      message,
       reviewId: triggerReviewId,
     });
 
-    const recipients = thresholds.notify_email_enabled ? parseEmailList(thresholds.notify_email) : [];
-    if (recipients.length > 0) {
-      const { data: triggerReview } = await supabase
-        .from("reviews")
-        .select("reviewer_name, comment")
-        .eq("id", triggerReviewId)
-        .single();
+    const { data: triggerReview } = await supabase
+      .from("reviews")
+      .select("reviewer_name, comment")
+      .eq("id", triggerReviewId)
+      .single();
 
-      if (triggerReview) {
+    if (triggerReview) {
+      // 1. Kirim notifikasi alert ke Bot Telegram SukaReview
+      await sendTelegramAlert({
+        type: "LOW_RATING_REVIEW",
+        severity,
+        title,
+        message,
+        outletName,
+        rating: triggerRating,
+        reviewerName: triggerReview.reviewer_name,
+        comment: triggerReview.comment,
+        reviewId: triggerReviewId,
+      });
+
+      // 2. Kirim email jika diaktifkan
+      const recipients = thresholds.notify_email_enabled ? parseEmailList(thresholds.notify_email) : [];
+      if (recipients.length > 0) {
         await sendLowRatingReviewEmail({
           to: recipients,
           outletName,
@@ -112,11 +131,23 @@ export async function evaluateOutletAlerts({
     .gte("google_created_at", windowStart);
 
   if ((negativeCount ?? 0) >= thresholds.negative_spike_count && !(await hasActiveAlert("NEGATIVE_SPIKE"))) {
+    const severity: AlertSeverity = (negativeCount ?? 0) >= thresholds.negative_spike_count * 1.5 ? "critical" : "high";
+    const title = outletName;
+    const message = `${negativeCount} review rating ≤2⭐ masuk dalam ${thresholds.negative_spike_window_hours} jam.`;
+
     await createAlert({
       type: "NEGATIVE_SPIKE",
-      severity: (negativeCount ?? 0) >= thresholds.negative_spike_count * 1.5 ? "critical" : "high",
-      title: outletName,
-      message: `${negativeCount} review rating ≤2⭐ masuk dalam ${thresholds.negative_spike_window_hours} jam.`,
+      severity,
+      title,
+      message,
+    });
+
+    await sendTelegramAlert({
+      type: "NEGATIVE_SPIKE",
+      severity,
+      title,
+      message,
+      outletName,
     });
   }
 
@@ -133,11 +164,23 @@ export async function evaluateOutletAlerts({
     outlet.current_rating < thresholds.low_outlet_rating_threshold &&
     !(await hasActiveAlert("LOW_OUTLET_RATING"))
   ) {
+    const severity: AlertSeverity = outlet.current_rating < thresholds.low_outlet_rating_threshold - 0.5 ? "high" : "medium";
+    const title = outletName;
+    const message = `Rating outlet turun ke ${outlet.current_rating.toFixed(1)}⭐, di bawah threshold ${thresholds.low_outlet_rating_threshold}⭐.`;
+
     await createAlert({
       type: "LOW_OUTLET_RATING",
-      severity: outlet.current_rating < thresholds.low_outlet_rating_threshold - 0.5 ? "high" : "medium",
-      title: outletName,
-      message: `Rating outlet turun ke ${outlet.current_rating.toFixed(1)}⭐, di bawah threshold ${thresholds.low_outlet_rating_threshold}⭐.`,
+      severity,
+      title,
+      message,
+    });
+
+    await sendTelegramAlert({
+      type: "LOW_OUTLET_RATING",
+      severity,
+      title,
+      message,
+      outletName,
     });
   }
 
@@ -163,11 +206,23 @@ export async function evaluateOutletAlerts({
     const drop = priorAvg - recentAvg;
 
     if (drop >= thresholds.rating_drop_threshold && !(await hasActiveAlert("RATING_DROP"))) {
+      const severity: AlertSeverity = drop >= thresholds.rating_drop_threshold * 2 ? "critical" : "high";
+      const title = outletName;
+      const message = `Rating turun dari ${priorAvg.toFixed(1)} ke ${recentAvg.toFixed(1)} dalam 7 hari terakhir.`;
+
       await createAlert({
         type: "RATING_DROP",
-        severity: drop >= thresholds.rating_drop_threshold * 2 ? "critical" : "high",
-        title: outletName,
-        message: `Rating turun dari ${priorAvg.toFixed(1)} ke ${recentAvg.toFixed(1)} dalam 7 hari terakhir.`,
+        severity,
+        title,
+        message,
+      });
+
+      await sendTelegramAlert({
+        type: "RATING_DROP",
+        severity,
+        title,
+        message,
+        outletName,
       });
     }
   }
