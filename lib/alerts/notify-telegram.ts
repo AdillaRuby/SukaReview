@@ -38,8 +38,8 @@ function getSeverityBadge(severity: AlertSeverity): string {
 }
 
 /**
- * Mengirimkan alert ulasan ke Bot Telegram SukaReview.
- * Mendukung pengiriman melalui endpoint outbox apps/bot atau langsung via Telegram Bot API.
+ * Mengirimkan alert ulasan ke Bot Telegram SukaReview,
+ * dan secara otomatis mengekalasikan ulasan buruk/kritis ke Bot Telegram CEO (J.A.R.V.I.S.).
  * Tidak pernah melempar error (best-effort) agar tidak mengganggu aliran pipeline ulasan.
  */
 export async function sendTelegramAlert(input: TelegramAlertInput): Promise<boolean> {
@@ -50,8 +50,14 @@ export async function sendTelegramAlert(input: TelegramAlertInput): Promise<bool
   const sendUrl = process.env.TELEGRAM_REVIEW_SEND_URL;
   const sendSecret = process.env.TELEGRAM_REVIEW_SEND_SECRET;
 
+  const ceoSendUrl = process.env.TELEGRAM_CEO_SEND_URL || "https://agents.sukashawarma.com/api/telegram/ceo/send";
+  const ceoSendSecret =
+    process.env.TELEGRAM_CEO_SEND_SECRET ||
+    process.env.TELEGRAM_REVIEW_SEND_SECRET ||
+    sendSecret;
+
   // Jika tidak ada konfigurasi Telegram sama sekali, skip secara graceful
-  if (!token && !sendUrl) {
+  if (!token && !sendUrl && !ceoSendSecret) {
     return false;
   }
 
@@ -98,9 +104,10 @@ export async function sendTelegramAlert(input: TelegramAlertInput): Promise<bool
 
   const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://review.sukashawarma.com"}/outlets`;
   const pesanLengkap = `${judulPesan}\n\n${isiPesan}`;
+  let suksesKirim = false;
 
   try {
-    // ─────────────────────────────────────────────────────────── METODE 1: Kirim lewat Bot Outbox Service (apps/bot)
+    // ─────────────────────────────────────────────────────────── METODE 1: Kirim lewat Bot Outbox Review (apps/bot)
     if (sendUrl && sendSecret) {
       const payload: Record<string, unknown> = {
         title: judulPesan,
@@ -126,14 +133,14 @@ export async function sendTelegramAlert(input: TelegramAlertInput): Promise<bool
       });
 
       if (res.ok) {
-        return true;
+        suksesKirim = true;
+      } else {
+        console.warn(`[telegram-alert] Gagal kirim via outbox review ${sendUrl} (${res.status})`);
       }
-      console.warn(`[telegram-alert] Gagal kirim via outbox ${sendUrl} (${res.status})`);
     }
 
-    // ─────────────────────────────────────────────────────────── METODE 2: Kirim langsung via Telegram Bot API
+    // ─────────────────────────────────────────────────────────── METODE 2: Kirim langsung via Telegram Bot API (Review Bot)
     if (token && targetChatIds.length > 0) {
-      let sukses = false;
       for (const chatId of targetChatIds) {
         try {
           const bodyPayload: Record<string, unknown> = {
@@ -154,7 +161,7 @@ export async function sendTelegramAlert(input: TelegramAlertInput): Promise<bool
           });
 
           if (tgRes.ok) {
-            sukses = true;
+            suksesKirim = true;
           } else {
             const errJson = await tgRes.json().catch(() => null);
             console.warn(`[telegram-alert] Telegram API error (${tgRes.status}):`, errJson);
@@ -163,10 +170,55 @@ export async function sendTelegramAlert(input: TelegramAlertInput): Promise<bool
           console.warn(`[telegram-alert] Gagal kirim ke chatId ${chatId}:`, singleErr);
         }
       }
-      return sukses;
     }
 
-    return false;
+    // ─────────────────────────────────────────────────────────── METODE 3: Eskalasi Kritis ke Bot Telegram CEO (J.A.R.V.I.S.)
+    // Hanya dipicu jika review berbahaya (<= 2⭐), negative spike, rating drop, atau severity high/critical
+    const isKritisUntukCeo =
+      input.severity === "critical" ||
+      input.severity === "high" ||
+      (typeof input.rating === "number" && input.rating <= 2) ||
+      input.type === "NEGATIVE_SPIKE";
+
+    if (isKritisUntukCeo && ceoSendSecret) {
+      try {
+        const stars = input.rating ? "⭐".repeat(Math.min(5, Math.max(1, input.rating))) : "⚠️";
+        const judulCeo = `🚨 [ESKALASI REVIEW] Ulasan Buruk ${stars} — ${input.outletName}`;
+        const isiCeo =
+          `Outlet: ${input.outletName}\n` +
+          `Reviewer: ${input.reviewerName || "Pelanggan Google"}\n` +
+          `Rating: ${input.rating ?? "-"} / 5\n` +
+          `Ulasan: "${input.comment || "(tanpa komentar tertulis)"}"\n` +
+          `Tingkat Bahaya: ${input.severity.toUpperCase()}\n\n` +
+          `Perhatian Direksi: Ulasan negatif masuk ke Google Maps. Mohon evaluasi segera standar rasa dan pelayanan cabang.`;
+
+        const ceoRes = await fetch(ceoSendUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${ceoSendSecret}`,
+          },
+          body: JSON.stringify({
+            broadcast: true,
+            title: judulCeo.slice(0, 180),
+            body: isiCeo.slice(0, 1200),
+            url: "https://suka.pantaureview.com",
+          }),
+          cache: "no-store",
+          signal: AbortSignal.timeout(5_000),
+        });
+
+        if (ceoRes.ok) {
+          suksesKirim = true;
+        } else {
+          console.warn(`[telegram-alert] Gagal eskalasi ke Bot CEO (${ceoRes.status})`);
+        }
+      } catch (errCeo) {
+        console.warn("[telegram-alert] Terjadi kesalahan saat eskalasi ke Bot CEO:", errCeo);
+      }
+    }
+
+    return suksesKirim;
   } catch (error) {
     console.warn("[telegram-alert] Terjadi kesalahan saat pengiriman alert Telegram:", error);
     return false;
