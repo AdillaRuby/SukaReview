@@ -150,6 +150,9 @@ create trigger outlets_set_updated_at
 -- Reviews: one row per Google review. google_review_id enforces idempotent
 -- upsert so repeated Pub/Sub notifications never create duplicates.
 
+-- Drop tabel reviews lama jika skemanya peninggalan template yang tidak memiliki outlet_id
+drop table if exists public.reviews cascade;
+
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
   google_review_id text not null unique,
@@ -505,3 +508,9 @@ alter table public.alert_settings
   add column if not exists notify_email_enabled boolean not null default false,
   add column if not exists notify_email text;
 
+
+
+-- ==================== sql/014_telegram_alert_settings.sql ====================
+alter table public.alert_settings
+  add column if not exists notify_telegram_enabled boolean not null default false,
+  add column if not exists notify_telegram_chat_ids text;
